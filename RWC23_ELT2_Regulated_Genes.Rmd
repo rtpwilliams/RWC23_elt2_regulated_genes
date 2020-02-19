@@ -9,4 +9,90 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+# Libraries
+
+```{r}
+library(DESeq2)
+library(dplyr)
+library(pheatmap)
+```
+
+
+
+# Differentail Expression
+
+Load data
+
+```{r}
+RNAcounts <- read.csv("./Table_S1_Raw_Read_Counts.csv", header=TRUE, row.names = 1)
+```
+
+This count file contains more samples than what I want to analyze. Subset the columns to just have `wt_sorted_*` and `elt2D_sorted_*`. Also select columns that correspond to ce11 genome assembly, since this is the genome used for the ChIP-seq analysis.
+
+```{r}
+cts <- RNAcounts %>% select(wt_sorted_1, wt_sorted_2, wt_sorted_3, wt_sorted_4, elt2D_sorted_1, elt2D_sorted_2, elt2D_sorted_3, elt2D_sorted_4)
+head(cts)
+```
+
+make `coldata`
+
+```{r}
+coldata <- data.frame(condition = c("wt", "wt", "wt", "wt", "elt2D", "elt2D", "elt2D", "elt2D"), row.names = colnames(cts))
+coldata
+```
+
+Check that column matrix and coldata match
+
+```{r}
+all(rownames(coldata) == colnames(cts))
+```
+
+Generate DESeqDataSet
+
+```{r}
+dds <- DESeqDataSetFromMatrix(countData = cts, colData = coldata, design = ~ condition)
+
+# add gene names
+moreFeatures <- data.frame(gene_name = RNAcounts$gene_id_val, sequence_id = RNAcounts$sequence_id_list)
+mcols(dds) <- DataFrame(mcols(dds), moreFeatures)
+mcols(dds)
+```
+
+Tell DESeq which samples are "control and which are "control" vs "treatment". This sets up the fold change comparison manually rather than letting the alphabetical determination of factor levels.
+
+ie: 
+without this step: logfoldchange(elt2D/wt)
+with this step: logfoldchange(wt/elt2D)
+
+```{r}
+dds$condition <- factor(dds$condition, levels = c("wt", "elt2D"))
+```
+
+Perform differential expression analysis
+
+```{r}
+dds <- DESeq(dds)
+```
+
+```{r}
+res <- results(dds)
+
+#View(as.data.frame(res))
+
+# Convert res to dataframe
+res.df <- as.data.frame(res)
+
+# Export the results table
+write.csv(res.df, file = "200218_L1_wt_vs_elt2D_results.csv")
+
+# Print results table information
+summary(res)
+```
+
+Make an MA plot cus why not
+
+```{r}
+plotMA(res, ylim = c(-10, 10))
+```
+
 
