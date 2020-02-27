@@ -32,3 +32,22 @@ ELT-2 ChIP-seq raw reads were processed by David King, and generated the file `L
 - RNA-seq data aligned with ce10 assembly with WS235 annotation
 - Chip-seq data aligned to ce11 assembly
 - ChIP-seq narrowPeak files do not have strand assignment
+
+## things to add
+
+code chunk from david to get annotation file for BETA
+
+
+```paramart <- useMart("parasite_mart", dataset = "wbps_gene", host = "https://parasite.wormbase.org", port = 443)
+genes_coding = getBM(mart = paramart, 
+                     filter=c("species_id_1010", 
+                              "biotype"), 
+                     value=list(species_id_1010="caelegprjna13758", 
+                                biotype="protein_coding"), 
+                     attributes = c('wbps_gene_id',
+                                    'chromosome_name', 
+                                    'start_position', 
+                                    'end_position', 
+                                    'strand',
+                                    'wormbase_gseq'))
+```
