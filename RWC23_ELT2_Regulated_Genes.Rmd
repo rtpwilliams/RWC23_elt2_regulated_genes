@@ -2,12 +2,21 @@
 title: "ELT-2 Regulated Genes"
 author: "Rtpw"
 date: "2/12/2020"
-output: html_document
+output:
+  pdf_document: default
+
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+
+# Next steps
+
+- perform GO
+- figure out rankings of gonad genes, then test most upregulated in elt-2(-)
+- figure out rankings of normally expressed genes, then test most upregulated in elt-2(-)
+- figure out which are transcription factors, test if combo RNAi of elt-2 and those TFs reduce normally expressed intestine overexpression
 
 # Libraries
 
@@ -24,7 +33,7 @@ library(pheatmap)
 Load data
 
 ```{r}
-RNAcounts <- read.csv("./Table_S1_Raw_Read_Counts.csv", header=TRUE, row.names = 1)
+RNAcounts <- read.csv("./01_input/Table_S1_Raw_Read_Counts.csv", header=TRUE, row.names = 1)
 ```
 
 This count file contains more samples than what I want to analyze. Subset the columns to just have `wt_sorted_*` and `elt2D_sorted_*`. Also select columns that correspond to ce11 genome assembly, since this is the genome used for the ChIP-seq analysis.
@@ -87,7 +96,42 @@ write.csv(res.df, file = "200218_L1_wt_vs_elt2D_results.csv")
 
 # Print results table information
 summary(res)
+res
 ```
+
+Determine if glh-1 is upregulated in elt-2(-)
+glh-1 = WBGene00001598
+glh-1 is a germline specific gene
+It is upregulated
+
+```{r}
+res.df[rownames(res.df) == "WBGene00001598",]
+```
+
+```{r}
+plotCounts(dds, gene = "WBGene00001598")
+```
+
+See if elt-2 is depleted
+It is depleted
+
+```{r}
+plotCounts(dds, gene = "WBGene00001250")
+```
+
+See if pgl-1 is enriched
+Looks like it is depleted.
+```{r}
+plotCounts(dds, gene = "WBGene00003992")
+```
+
+see if egl-20 (ligand of Wnt pathway) is expressed
+Also is depleted
+
+```{r}
+plotCounts(dds, gene = "WBGene00001188")
+```
+
 
 Make an MA plot cus why not
 
@@ -95,4 +139,22 @@ Make an MA plot cus why not
 plotMA(res, ylim = c(-10, 10))
 ```
 
+Reformat for BETA
+
+```{r}
+betaDE <- data.frame(WBGeneID = rownames(res.df), lfc = res.df$log2FoldChange, q = res.df$padj)
+
+write.table(betaDE, file = "./200218_L1_wt_vs_elt2D_results_BETA.tsv", sep = "\t", col.names = FALSE, row.names = FALSE, quote = FALSE)
+```
+
+# Import ChIP-seq data
+
+```{r}
+peaks <- read.delim("./01_input/L1_1_L1_2.IDR_0.05.narrowPeak", header = FALSE, sep = "\t")
+head(peaks)
+
+peaks_subset <- data.frame(chrom = peaks$V1, start = peaks$V2, end = peaks$V3, name = peaks$V4, score = peaks$V5, strand = peaks$V6)
+
+write.table(peaks_subset, file = "200218_L1_ELT2_ChIP_Peaks_BETA.tsv", sep = "\t", col.names = FALSE, row.names = FALSE, quote = FALSE)
+```
 
