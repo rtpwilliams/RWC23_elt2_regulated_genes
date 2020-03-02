@@ -21,9 +21,12 @@ knitr::opts_chunk$set(echo = TRUE)
 # Libraries
 
 ```{r}
-library(DESeq2)
+library(biomaRt)
+#library(DESeq2)
 library(dplyr)
 library(pheatmap)
+library(stringr)
+library(GeneNetworkBuilder)
 ```
 
 
@@ -147,6 +150,33 @@ betaDE <- data.frame(WBGeneID = rownames(res.df), lfc = res.df$log2FoldChange, q
 write.table(betaDE, file = "./200218_L1_wt_vs_elt2D_results_BETA.tsv", sep = "\t", col.names = FALSE, row.names = FALSE, quote = FALSE)
 ```
 
+Determine upregulated TFs
+
+```{r}
+betaDE <- read.delim("./02_formatted/200218_L1_wt_vs_elt2D_results_BETA.tsv", header = FALSE, sep = "\t")
+colnames(betaDE) <- c("WBGeneID", "logFC", "P.Value")
+dim(betaDE)
+wTF3.0 <- read.delim("./TF3-0_namesonly.txt", header = TRUE, sep = "\t") %>% select(Sequence.name, Public_name, WBGeneID, DBD)
+
+dim(wTF3.0)
+elt2_responding_TF <- merge(wTF3.0, betaDE, by.x = "WBGeneID", by.y = "WBGeneID")
+
+intestine_expressed_TF <- read.delim("/Users/rtpw/Documents/02_COMPUTATIONAL/RWC19_Intestine_TF_List/intestine_TF_database.csv", header = TRUE, sep = ",")
+
+intestine_expressed_elt2KO_reponse <- merge(betaDE, intestine_expressed_TF, by.x = "WBGeneID", by.y = "WBGeneID")
+
+LE_intestine_expressed_elt2KO_reponse<- intestine_expressed_elt2KO_reponse %>% filter(spencer_LE_bool == TRUE)
+
+View(intestine_expressed_elt2KO_reponse %>% filter(tintori_2Ep_bool == TRUE))
+```
+
+```{r}
+#upELT2minus 
+
+res.df %>% filter()
+```
+
+
 # Import ChIP-seq data
 
 ```{r}
@@ -156,5 +186,114 @@ head(peaks)
 peaks_subset <- data.frame(chrom = peaks$V1, start = peaks$V2, end = peaks$V3, name = peaks$V4, score = peaks$V5, strand = peaks$V6)
 
 write.table(peaks_subset, file = "200218_L1_ELT2_ChIP_Peaks_BETA.tsv", sep = "\t", col.names = FALSE, row.names = FALSE, quote = FALSE)
+```
+
+# Make BETA-friendly GTF file
+
+This annotation file corresponds to annotation version WS271.
+
+```{r}
+paramart <- useMart("parasite_mart", dataset = "wbps_gene", host = "https://parasite.wormbase.org", port = 443)
+
+genes_coding = getBM(mart = paramart, 
+                     filter=c("species_id_1010", 
+                              "biotype"), 
+                     value=list(species_id_1010="caelegprjna13758", 
+                                biotype="protein_coding"), 
+                     attributes = c('refseq_mrna',
+                                    'chromosome_name',
+                                    'strand',
+                                    'start_position', 
+                                    'end_position', 
+                                    'wbps_gene_id'))
+
+# exclude mitochondria
+genes_coding_noMT = genes_coding[genes_coding$chromosome_name != 'MtDNA',]
+# add 'chr'
+genes_coding_noMT$chromosome_name = paste('chr', genes_coding_noMT$chromosome_name, sep='')
+# strands must be '+/-', but paramart returns 1/-1
+strand_plus_minus = genes_coding_noMT$strand
+strand_plus_minus[ strand_plus_minus == '1'] <- '+'
+strand_plus_minus[ strand_plus_minus == '-1'] <- '-'
+genes_coding_noMT$strand = strand_plus_minus
+
+head(genes_coding_noMT)
+colnames(genes_coding_noMT) <- c("refseqID", "chrom", "strand", "start", "end", "WBGeneID")
+genes_coding_noMT_reduced <- genes_coding_noMT %>% filter(refseqID %in% refseqBetaDE$refseqID)
+
+write.table(genes_coding_noMT_reduced, file = "200227_Wormbase_WS271_Genome_Annotation.tsv", sep = "\t", col.names = FALSE, row.names = FALSE, quote = FALSE)
+```
+
+# Replace WBGeneID for Refseq mRNA ID
+
+```{r}
+betaDE <- read.table("./02_formatted/200218_L1_wt_vs_elt2D_results_BETA.tsv", sep = "\t")
+colnames(betaDE) <- c("WBGeneID", "lfc", "P.value")
+
+# remove rows with NA
+betaDE %>% filter(lfc != "NA" , q != "NA")
+write.table(betaDE, file = "./02_formatted/200227_L1_wt_vs_elt2D_results_BETA_noNA.tsv", sep = "\t", col.names = FALSE, row.names = FALSE, quote = FALSE)
+
+refseqBetaDE <- inner_join(betaDE, genes_coding_noMT, by = "WBGeneID") %>% select(refseqID, lfc, q) %>% filter(refseqID != "", lfc != "NA" , q != "NA")
+
+dim(refseqBetaDE)
+write.table(refseqBetaDE, file = "./02_formatted/200227_L1_wt_vs_elt2D_results_BETA_refseq.tsv", sep = "\t", col.names = FALSE, row.names = FALSE, quote = FALSE)
+```
+
+# Use GeneNetworkBuilder
+
+this software makes plots that incorporate differential expression data (elt-2 (-) vs wt) and gene assignments of ELT-2 ChIP-seq peaks.
+
+```{r}
+peaks.df <- read.table(file = "annotated_Peaks.df", header = TRUE)
+l1_peak_genes <- peaks.df %>% filter(L1_IDR == TRUE) %>% select(feature)
+l1_peak_genes_GNB <- data.frame(from = "WBGene00001250", to = unique(l1_peak_genes$feature))
+
+sifNetwork <- buildNetwork(TFbindingTable = l1_peak_genes_GNB, interactionmap = ce.interactionmap, level = 1)
+
+cifNetwork <- filterNetwork(rootgene = "WBGene00001250", sifNetwork = sifNetwork, exprsData = betaDE, mergeBy = "WBGeneID", remove_miRNA = TRUE, tolerance = 1)
+
+gR <- polishNetwork(cifNetwork=cifNetwork,
+                  nodecolor=colorRampPalette(c("green", 
+                                               "yellow", 
+                                               "red"))(2594))
+gR
+# this is too big to make
+#(html <- browseNetwork(gR, maxNodes = 2594))
+
+```
+
+Make a network with stricter cutoffs
+
+```{r}
+data("ce.IDsMap")
+data("ce.mapIDs")
+sifNetwork <- buildNetwork(TFbindingTable = l1_peak_genes_GNB, interactionmap = ce.interactionmap, level = 2)
+
+cifNetwork <- filterNetwork(rootgene = "WBGene00001250", sifNetwork = sifNetwork, exprsData = betaDE, mergeBy = "WBGeneID", remove_miRNA = TRUE, tolerance = 1, cutoffPVal = 0.01, cutoffLFC = 2)
+
+cifNetwork <- convertID(cifNetwork, ce.mapIDs, ByName = c("from", "to"))
+
+gR <- polishNetwork(na.omit(cifNetwork), nodecolor = colorRampPalette(c("green", "yellow", "red"))(10))
+gR
+
+elt2network <- browseNetwork(gR, maxNodes = 528)
+
+exportNetwork(elt2network, "elt2network.html")
+```
+
+This is very messy. Subset more
+
+```{r}
+cifNetwork %>% filter(from == c("elt-2", "pqm-1", "pha-4"), logFC >= 1)
+
+gR <- polishNetwork(cifNetwork %>% filter(from == c("elt-2", "pqm-1"), logFC >= 1),
+                    nodecolor = colorRampPalette(c("green", "yellow", "red"))(10))
+browseNetwork(gR)
+
+gR <- polishNetwork(na.omit(cifNetwork %>% filter(from == c("elt-2", "pqm-1"))),
+                    nodecolor = colorRampPalette(c("green", "yellow", "red"))(10))
+elt2_pqm1_network <- browseNetwork(gR)
+exportNetwork(elt2_pqm1_network, "elt2_pqm1_network.html")
 ```
 
