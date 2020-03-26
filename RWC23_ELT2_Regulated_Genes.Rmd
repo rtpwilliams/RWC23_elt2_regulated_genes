@@ -18,14 +18,17 @@ knitr::opts_chunk$set(echo = TRUE)
 - figure out rankings of normally expressed genes, then test most upregulated in elt-2(-)
 - figure out which are transcription factors, test if combo RNAi of elt-2 and those TFs reduce normally expressed intestine overexpression
 
+# Improvements
+
+Align RNA seq data to ce11 genome with more recent annotation.
+
 # Libraries
 
 ```{r}
 library(biomaRt)
-#library(DESeq2)
-library(dplyr)
+library(DESeq2)
+library(tidyverse)
 library(pheatmap)
-library(stringr)
 library(GeneNetworkBuilder)
 ```
 
@@ -70,11 +73,9 @@ mcols(dds) <- DataFrame(mcols(dds), moreFeatures)
 mcols(dds)
 ```
 
-Tell DESeq which samples are "control and which are "control" vs "treatment". This sets up the fold change comparison manually rather than letting the alphabetical determination of factor levels.
+Tell DESeq which samples are "control" and which are "control" vs "treatment". This sets up the fold change comparison manually rather than letting the alphabetical determination of factor levels.
 
-ie: 
-without this step: logfoldchange(elt2D/wt)
-with this step: logfoldchange(wt/elt2D)
+with this step: logfoldchange(elt2D/wt)
 
 ```{r}
 dds$condition <- factor(dds$condition, levels = c("wt", "elt2D"))
@@ -89,23 +90,34 @@ dds <- DESeq(dds)
 ```{r}
 res <- results(dds)
 
-#View(as.data.frame(res))
 
 # Convert res to dataframe
 res.df <- as.data.frame(res)
 
 # Export the results table
-write.csv(res.df, file = "200218_L1_wt_vs_elt2D_results.csv")
+write.csv(res.df, file = "./02_DESeq2/200218_L1_wt_vs_elt2D_results.csv")
 
 # Print results table information
+head(res)
+```
+```{r}
 summary(res)
-res
 ```
 
-Determine if glh-1 is upregulated in elt-2(-)
-glh-1 = WBGene00001598
-glh-1 is a germline specific gene
-It is upregulated
+Perform vst and rlog transformation of read counts
+
+```{r}
+vsd <- vst(dds)
+rld <- rlog(dds)
+```
+
+
+# Explore Differential Expression
+
+Determine if glh-1 is upregulated in elt-2(-)  
+glh-1 = WBGene00001598  
+glh-1 is a germline specific gene  
+It is upregulated  
 
 ```{r}
 res.df[rownames(res.df) == "WBGene00001598",]
@@ -115,69 +127,124 @@ res.df[rownames(res.df) == "WBGene00001598",]
 plotCounts(dds, gene = "WBGene00001598")
 ```
 
-See if elt-2 is depleted
-It is depleted
+See if elt-2 is depleted   
+It is depleted  
 
 ```{r}
 plotCounts(dds, gene = "WBGene00001250")
 ```
 
-See if pgl-1 is enriched
-Looks like it is depleted.
+See if pgl-1 is enriched  
+pgl-1 = WBGene00003992  
+Looks like it is enriched.  
+
 ```{r}
 plotCounts(dds, gene = "WBGene00003992")
 ```
 
-see if egl-20 (ligand of Wnt pathway) is expressed
-Also is depleted
+see if egl-20 (ligand of Wnt pathway) is expressed  
+Also is depleted  
 
 ```{r}
 plotCounts(dds, gene = "WBGene00001188")
 ```
 
 
-Make an MA plot cus why not
+Make an MA plot for all the data.  
 
 ```{r}
 plotMA(res, ylim = c(-10, 10))
 ```
 
-Reformat for BETA
+Make a heatmap of differentially expressed genes.  
+Use variance of rlog transformed read counts to filter the data set for genes that are actually changing.  
 
 ```{r}
-betaDE <- data.frame(WBGeneID = rownames(res.df), lfc = res.df$log2FoldChange, q = res.df$padj)
+select <- rowVars(assay(rld)) > 1
 
-write.table(betaDE, file = "./200218_L1_wt_vs_elt2D_results_BETA.tsv", sep = "\t", col.names = FALSE, row.names = FALSE, quote = FALSE)
+rowNormalized <- assay(rld)-rowMeans(assay(rld))
+
+pheatmap(rowNormalized[select,], cluster_cols = FALSE, cluster_rows = TRUE, show_rownames = FALSE)
+
 ```
 
-Determine upregulated TFs
+
+# Determine ELT-2 regulated TFs
+
+Load in datasets
 
 ```{r}
-betaDE <- read.delim("./02_formatted/200218_L1_wt_vs_elt2D_results_BETA.tsv", header = FALSE, sep = "\t")
-colnames(betaDE) <- c("WBGeneID", "logFC", "P.Value")
-dim(betaDE)
+
+res.df <- read.csv(file = "./02_DESeq2/200218_L1_wt_vs_elt2D_results.csv", header = TRUE, sep = ",", row.names = 1)
+
+res.df <- rownames_to_column(res.df, var = "WBGeneID")
+
 wTF3.0 <- read.delim("./TF3-0_namesonly.txt", header = TRUE, sep = "\t") %>% select(Sequence.name, Public_name, WBGeneID, DBD)
 
-dim(wTF3.0)
-elt2_responding_TF <- merge(wTF3.0, betaDE, by.x = "WBGeneID", by.y = "WBGeneID")
-
-intestine_expressed_TF <- read.delim("/Users/rtpw/Documents/02_COMPUTATIONAL/RWC19_Intestine_TF_List/intestine_TF_database.csv", header = TRUE, sep = ",")
-
-intestine_expressed_elt2KO_reponse <- merge(betaDE, intestine_expressed_TF, by.x = "WBGeneID", by.y = "WBGeneID")
-
-LE_intestine_expressed_elt2KO_reponse<- intestine_expressed_elt2KO_reponse %>% filter(spencer_LE_bool == TRUE)
-
-View(intestine_expressed_elt2KO_reponse %>% filter(tintori_2Ep_bool == TRUE))
 ```
+
+Subset elt-2(-) differentially expressed genes for transcription factors with wTF3.0 dataset.  
 
 ```{r}
-#upELT2minus 
+elt2_responding_TF <- merge(wTF3.0, res.df, by.x = "WBGeneID", by.y = "WBGeneID")
+dim(elt2_responding_TF)
+head(elt2_responding_TF)
+```
+Make an MA plot of differentially expressed transcription factors.  
 
-res.df %>% filter()
+```{r}
+threshold = 0.01
+ggplot(data = elt2_responding_TF) + 
+  geom_point(aes(x = baseMean, y = log2FoldChange, colour = cut(padj, c(-Inf, threshold, +Inf)))) +
+  scale_colour_manual(name = "padj", values = c("red", "black")
+  ) +
+  scale_x_log10() 
+```
+
+Separate dataset into activated and repressed TFs.  
+
+```{r}
+elt2_activated_TF <- elt2_responding_TF %>% filter(log2FoldChange <= 0, padj <= threshold)
+elt2_repressed_TF <- elt2_responding_TF %>% filter(log2FoldChange >= 0, padj <= threshold)
+
+
+```
+
+Make heatmap of differentially expressed TFs.  
+
+```{r}
+nameselect <- rownames(assay(rld)) %in% wTF3.0$WBGeneID 
+
+nameMatrix <- assay(rld)[nameselect,]
+
+varselect <- rowVars(nameMatrix) > 0.1
+
+namevarMatrix <- nameMatrix[varselect, ]
+
+namevarRowNormalized <- namevarMatrix - rowMeans(namevarMatrix)
+
+pheatmap(namevarRowNormalized, cluster_cols = FALSE, cluster_rows = TRUE, show_rownames = FALSE, border_color = NA)
+```
+
+Replace WBGeneID with gene name in row name.  
+
+```{r}
+rownames(namevarRowNormalized)
+
+paramart <- useMart("parasite_mart", dataset = "wbps_gene", host = "https://parasite.wormbase.org", port = 443)
+
+name2id = getBM(mart = paramart, 
+                     filter=c("species_id_1010", 
+                              "biotype"), 
+                     value=list(species_id_1010="caelegprjna13758", 
+                                biotype="protein_coding"), 
+                     attributes = c('external_gene_id', 
+                                    'wbps_gene_id'))
+head(name2id)
 ```
 
 
-# Import ChIP-seq data
+# Integrate ChIP-seq data
 
 ```{r}
 peaks <- read.delim("./01_input/L1_1_L1_2.IDR_0.05.narrowPeak", header = FALSE, sep = "\t")
@@ -185,7 +252,7 @@ head(peaks)
 
 peaks_subset <- data.frame(chrom = peaks$V1, start = peaks$V2, end = peaks$V3, name = peaks$V4, score = peaks$V5, strand = peaks$V6)
 
-write.table(peaks_subset, file = "200218_L1_ELT2_ChIP_Peaks_BETA.tsv", sep = "\t", col.names = FALSE, row.names = FALSE, quote = FALSE)
+write.table(peaks_subset, file = "./03_BETA/BETA_Formatted_Input/200218_L1_ELT2_ChIP_Peaks_BETA.tsv", sep = "\t", col.names = FALSE, row.names = FALSE, quote = FALSE)
 ```
 
 # Make BETA-friendly GTF file
@@ -232,13 +299,21 @@ colnames(betaDE) <- c("WBGeneID", "lfc", "P.value")
 
 # remove rows with NA
 betaDE %>% filter(lfc != "NA" , q != "NA")
-write.table(betaDE, file = "./02_formatted/200227_L1_wt_vs_elt2D_results_BETA_noNA.tsv", sep = "\t", col.names = FALSE, row.names = FALSE, quote = FALSE)
+write.table(betaDE, file = "./03_BETA/BETA_Formatted_Input/200227_L1_wt_vs_elt2D_results_BETA_noNA.tsv", sep = "\t", col.names = FALSE, row.names = FALSE, quote = FALSE)
 
 refseqBetaDE <- inner_join(betaDE, genes_coding_noMT, by = "WBGeneID") %>% select(refseqID, lfc, q) %>% filter(refseqID != "", lfc != "NA" , q != "NA")
 
 dim(refseqBetaDE)
-write.table(refseqBetaDE, file = "./02_formatted/200227_L1_wt_vs_elt2D_results_BETA_refseq.tsv", sep = "\t", col.names = FALSE, row.names = FALSE, quote = FALSE)
+write.table(refseqBetaDE, file = "./03_BETA/BETA_Formatted_Input/200227_L1_wt_vs_elt2D_results_BETA_refseq.tsv", sep = "\t", col.names = FALSE, row.names = FALSE, quote = FALSE)
 ```
+
+Use command line to run BETA. Example code below.
+
+```{bash}
+BETA basic -p 03_BETA/BETA_Formatted_Input/200218_L1_ELT2_ChIP_Peaks_BETA.tsv -e 03_BETA/BETA_Formatted_Input/200227_L1_wt_vs_elt2D_results_BETA_refseq.tsv -k BSF --gname2 -r 200227_Wormbase_WS271_Genome_Annotation.tsv -n basic -d 2000
+```
+
+Overall having a hard time executing and getting output from BETA. Going to try a different tool.
 
 # Use GeneNetworkBuilder
 
@@ -279,7 +354,7 @@ gR
 
 elt2network <- browseNetwork(gR, maxNodes = 528)
 
-exportNetwork(elt2network, "elt2network.html")
+exportNetwork(elt2network, "./04_GeneNetworkBuilder/elt2network.html")
 ```
 
 This is very messy. Subset more
@@ -287,13 +362,23 @@ This is very messy. Subset more
 ```{r}
 cifNetwork %>% filter(from == c("elt-2", "pqm-1", "pha-4"), logFC >= 1)
 
-gR <- polishNetwork(cifNetwork %>% filter(from == c("elt-2", "pqm-1"), logFC >= 1),
+gR <- polishNetwork(cifNetwork %>% filter(from == c("elt-2", "zip-10"), logFC >= 1),
                     nodecolor = colorRampPalette(c("green", "yellow", "red"))(10))
 browseNetwork(gR)
 
-gR <- polishNetwork(na.omit(cifNetwork %>% filter(from == c("elt-2", "pqm-1"))),
+gR_pqm1 <- polishNetwork(na.omit(cifNetwork %>% filter(from == c("elt-2", "pqm-1"))),
                     nodecolor = colorRampPalette(c("green", "yellow", "red"))(10))
-elt2_pqm1_network <- browseNetwork(gR)
+
+browseNetwork(gR_pqm1)
+
+gR_skn1 <- polishNetwork(na.omit(cifNetwork %>% filter(from == c("elt-2", "skn-1"))),
+                    nodecolor = colorRampPalette(c("green", "yellow", "red"))(10))
+
+browseNetwork(gR_skn1)
+
+elt2_pqm1_network <- browseNetwork(gR_pqm1)
 exportNetwork(elt2_pqm1_network, "elt2_pqm1_network.html")
+
+exportNetwork(gR_skn1, "elt2_skn1_network.html")
 ```
 
