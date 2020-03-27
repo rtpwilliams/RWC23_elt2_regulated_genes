@@ -1,0 +1,74 @@
+---
+title: "RWC23_ELT2_GeneNetworkBuilder"
+output: html_notebook
+---
+
+
+# Use GeneNetworkBuilder
+
+this software makes plots that incorporate differential expression data (elt-2 (-) vs wt) and gene assignments of ELT-2 ChIP-seq peaks.
+
+```{r}
+peaks.df <- read.table(file = "annotated_Peaks.df", header = TRUE)
+l1_peak_genes <- peaks.df %>% filter(L1_IDR == TRUE) %>% select(feature)
+l1_peak_genes_GNB <- data.frame(from = "WBGene00001250", to = unique(l1_peak_genes$feature))
+
+sifNetwork <- buildNetwork(TFbindingTable = l1_peak_genes_GNB, interactionmap = ce.interactionmap, level = 1)
+
+cifNetwork <- filterNetwork(rootgene = "WBGene00001250", sifNetwork = sifNetwork, exprsData = betaDE, mergeBy = "WBGeneID", remove_miRNA = TRUE, tolerance = 1)
+
+gR <- polishNetwork(cifNetwork=cifNetwork,
+                  nodecolor=colorRampPalette(c("green", 
+                                               "yellow", 
+                                               "red"))(2594))
+gR
+# this is too big to make
+#(html <- browseNetwork(gR, maxNodes = 2594))
+
+```
+
+Make a network with stricter cutoffs
+
+```{r}
+data("ce.IDsMap")
+data("ce.mapIDs")
+sifNetwork <- buildNetwork(TFbindingTable = l1_peak_genes_GNB, interactionmap = ce.interactionmap, level = 2)
+
+cifNetwork <- filterNetwork(rootgene = "WBGene00001250", sifNetwork = sifNetwork, exprsData = betaDE, mergeBy = "WBGeneID", remove_miRNA = TRUE, tolerance = 1, cutoffPVal = 0.01, cutoffLFC = 2)
+
+cifNetwork <- convertID(cifNetwork, ce.mapIDs, ByName = c("from", "to"))
+
+gR <- polishNetwork(na.omit(cifNetwork), nodecolor = colorRampPalette(c("green", "yellow", "red"))(10))
+gR
+
+elt2network <- browseNetwork(gR, maxNodes = 528)
+
+exportNetwork(elt2network, "./04_GeneNetworkBuilder/elt2network.html")
+```
+
+This is very messy. Subset more
+
+```{r}
+cifNetwork %>% filter(from == c("elt-2", "pqm-1", "pha-4"), logFC >= 1)
+
+gR <- polishNetwork(cifNetwork %>% filter(from == c("elt-2", "zip-10"), logFC >= 1),
+                    nodecolor = colorRampPalette(c("green", "yellow", "red"))(10))
+browseNetwork(gR)
+
+gR_pqm1 <- polishNetwork(na.omit(cifNetwork %>% filter(from == c("elt-2", "pqm-1"))),
+                    nodecolor = colorRampPalette(c("green", "yellow", "red"))(10))
+
+browseNetwork(gR_pqm1)
+
+gR_skn1 <- polishNetwork(na.omit(cifNetwork %>% filter(from == c("elt-2", "skn-1"))),
+                    nodecolor = colorRampPalette(c("green", "yellow", "red"))(10))
+
+browseNetwork(gR_skn1)
+
+elt2_pqm1_network <- browseNetwork(gR_pqm1)
+exportNetwork(elt2_pqm1_network, "elt2_pqm1_network.html")
+
+exportNetwork(gR_skn1, "elt2_skn1_network.html")
+```
+
+
