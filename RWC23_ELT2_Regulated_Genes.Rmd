@@ -12,11 +12,14 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 # Next steps
-
+HIGH
+- Do Z score of row normalization, divide by the standard deviation
+LOW
 - perform GO
 - figure out rankings of gonad genes, then test most upregulated in elt-2(-)
 - figure out rankings of normally expressed genes, then test most upregulated in elt-2(-)
 - figure out which are transcription factors, test if combo RNAi of elt-2 and those TFs reduce normally expressed intestine overexpression
+
 
 # Improvements
 
@@ -29,7 +32,7 @@ library(biomaRt)
 library(DESeq2)
 library(tidyverse)
 library(pheatmap)
-library(GeneNetworkBuilder)
+library(readxl)
 ```
 
 
@@ -160,11 +163,11 @@ Make a heatmap of differentially expressed genes.
 Use variance of rlog transformed read counts to filter the data set for genes that are actually changing.  
 
 ```{r}
-select <- rowVars(assay(rld)) > 1
+select <- rowVars(assay(rld)) > 0.5
 
 rowNormalized <- assay(rld)-rowMeans(assay(rld))
 
-pheatmap(rowNormalized[select,], cluster_cols = FALSE, cluster_rows = TRUE, show_rownames = FALSE)
+pheatmap(rowNormalized[select, ], cluster_cols = FALSE, cluster_rows = TRUE, show_rownames = FALSE)
 
 ```
 
@@ -206,8 +209,6 @@ Separate dataset into activated and repressed TFs.
 ```{r}
 elt2_activated_TF <- elt2_responding_TF %>% filter(log2FoldChange <= 0, padj <= threshold)
 elt2_repressed_TF <- elt2_responding_TF %>% filter(log2FoldChange >= 0, padj <= threshold)
-
-
 ```
 
 Make heatmap of differentially expressed TFs.  
@@ -241,144 +242,85 @@ name2id = getBM(mart = paramart,
                      attributes = c('external_gene_id', 
                                     'wbps_gene_id'))
 head(name2id)
+
 ```
 
 
-# Integrate ChIP-seq data
+# ELT-2 Bound and Reuglated Genes
+
+This section will integrate the L1 stage ELT-2 ChIP data analyzed by David.  
+
+Load in data.
 
 ```{r}
-peaks <- read.delim("./01_input/L1_1_L1_2.IDR_0.05.narrowPeak", header = FALSE, sep = "\t")
-head(peaks)
+elt2_peaks <- read_excel("2020_03_27_peaks.xlsx")
 
-peaks_subset <- data.frame(chrom = peaks$V1, start = peaks$V2, end = peaks$V3, name = peaks$V4, score = peaks$V5, strand = peaks$V6)
-
-write.table(peaks_subset, file = "./03_BETA/BETA_Formatted_Input/200218_L1_ELT2_ChIP_Peaks_BETA.tsv", sep = "\t", col.names = FALSE, row.names = FALSE, quote = FALSE)
+# Subset for genes bound in the L1 stage
+elt2_L1_peaks <- elt2_peaks %>% select(mapped_gene, L1) %>% filter(L1 == 1) %>% select(mapped_gene)
 ```
 
-# Make BETA-friendly GTF file
-
-This annotation file corresponds to annotation version WS271.
+Now subset the row normalized set expression set for these genes.
 
 ```{r}
+nameselect <- rownames(assay(rld)) %in% elt2_L1_peaks$mapped_gene
+
+nameMatrix <- assay(rld)[nameselect,]
+
+dim(nameMatrix)
+
+varselect <- rowVars(nameMatrix) >= 0.5
+
+namevarMatrix <- nameMatrix[varselect, ]
+
+c(dim(nameMatrix), dim(namevarMatrix))
+
+namevarRowNormalized <- namevarMatrix - rowMeans(namevarMatrix) # also try to divide by standard deviation
+
+head(rownames(namevarRowNormalized))
+
+# Replace WBGeneID row name with gene name
+
+# download list of WBGeneIDs and gene names based on presence in this matrix
 paramart <- useMart("parasite_mart", dataset = "wbps_gene", host = "https://parasite.wormbase.org", port = 443)
+id2name <- biomaRt::getBM(mart = paramart, 
+               filter=c("wbps_gene_id"), 
+               value=rownames(namevarRowNormalized), 
+                          attributes = c('wbps_gene_id','external_gene_id')
+                          )
+# Duplicate the matrix
+namevarRowNormalizedGenename <- namevarRowNormalized
 
-genes_coding = getBM(mart = paramart, 
-                     filter=c("species_id_1010", 
-                              "biotype"), 
-                     value=list(species_id_1010="caelegprjna13758", 
-                                biotype="protein_coding"), 
-                     attributes = c('refseq_mrna',
-                                    'chromosome_name',
-                                    'strand',
-                                    'start_position', 
-                                    'end_position', 
-                                    'wbps_gene_id'))
+# Replace the row names of this new matrix based on the matching row in id2name
+rownames(namevarRowNormalizedGenename) <- id2name$external_gene_id[ match(rownames(namevarRowNormalized), id2name$wbps_gene_id)]
 
-# exclude mitochondria
-genes_coding_noMT = genes_coding[genes_coding$chromosome_name != 'MtDNA',]
-# add 'chr'
-genes_coding_noMT$chromosome_name = paste('chr', genes_coding_noMT$chromosome_name, sep='')
-# strands must be '+/-', but paramart returns 1/-1
-strand_plus_minus = genes_coding_noMT$strand
-strand_plus_minus[ strand_plus_minus == '1'] <- '+'
-strand_plus_minus[ strand_plus_minus == '-1'] <- '-'
-genes_coding_noMT$strand = strand_plus_minus
+# Spot check that renaming is done correctly. Use `wormbase.org` as reference.
+num <- 100
+c(rownames(namevarRowNormalized)[num], rownames(namevarRowNormalizedGenename)[num])
 
-head(genes_coding_noMT)
-colnames(genes_coding_noMT) <- c("refseqID", "chrom", "strand", "start", "end", "WBGeneID")
-genes_coding_noMT_reduced <- genes_coding_noMT %>% filter(refseqID %in% refseqBetaDE$refseqID)
+pheatmap(namevarRowNormalizedGenename, 
+         cluster_cols = FALSE, 
+         cluster_rows = TRUE, 
+         show_rownames = TRUE, 
+         border_color = NA,
+         cellheight = 10,
+         filename = "./200327_L1_Elt2_Bound_Regulated_Genes_Row_Normalized.pdf")
 
-write.table(genes_coding_noMT_reduced, file = "200227_Wormbase_WS271_Genome_Annotation.tsv", sep = "\t", col.names = FALSE, row.names = FALSE, quote = FALSE)
+
 ```
 
-# Replace WBGeneID for Refseq mRNA ID
+Do a similar analysis for TFs only.  
 
 ```{r}
-betaDE <- read.table("./02_formatted/200218_L1_wt_vs_elt2D_results_BETA.tsv", sep = "\t")
-colnames(betaDE) <- c("WBGeneID", "lfc", "P.value")
+tfselect <- rownames(assay(rld)) %in% wTF3.0$WBGeneID
 
-# remove rows with NA
-betaDE %>% filter(lfc != "NA" , q != "NA")
-write.table(betaDE, file = "./03_BETA/BETA_Formatted_Input/200227_L1_wt_vs_elt2D_results_BETA_noNA.tsv", sep = "\t", col.names = FALSE, row.names = FALSE, quote = FALSE)
+tfMatrix <- assay(rld)[tfselect,]
 
-refseqBetaDE <- inner_join(betaDE, genes_coding_noMT, by = "WBGeneID") %>% select(refseqID, lfc, q) %>% filter(refseqID != "", lfc != "NA" , q != "NA")
+tfvarselect <- rowVars(tfMatrix) >= 0
 
-dim(refseqBetaDE)
-write.table(refseqBetaDE, file = "./03_BETA/BETA_Formatted_Input/200227_L1_wt_vs_elt2D_results_BETA_refseq.tsv", sep = "\t", col.names = FALSE, row.names = FALSE, quote = FALSE)
-```
+tfvarMatrix <- tfMatrix[tfvarselect, ]
 
-Use command line to run BETA. Example code below.
 
-```{bash}
-BETA basic -p 03_BETA/BETA_Formatted_Input/200218_L1_ELT2_ChIP_Peaks_BETA.tsv -e 03_BETA/BETA_Formatted_Input/200227_L1_wt_vs_elt2D_results_BETA_refseq.tsv -k BSF --gname2 -r 200227_Wormbase_WS271_Genome_Annotation.tsv -n basic -d 2000
-```
-
-Overall having a hard time executing and getting output from BETA. Going to try a different tool.
-
-# Use GeneNetworkBuilder
-
-this software makes plots that incorporate differential expression data (elt-2 (-) vs wt) and gene assignments of ELT-2 ChIP-seq peaks.
-
-```{r}
-peaks.df <- read.table(file = "annotated_Peaks.df", header = TRUE)
-l1_peak_genes <- peaks.df %>% filter(L1_IDR == TRUE) %>% select(feature)
-l1_peak_genes_GNB <- data.frame(from = "WBGene00001250", to = unique(l1_peak_genes$feature))
-
-sifNetwork <- buildNetwork(TFbindingTable = l1_peak_genes_GNB, interactionmap = ce.interactionmap, level = 1)
-
-cifNetwork <- filterNetwork(rootgene = "WBGene00001250", sifNetwork = sifNetwork, exprsData = betaDE, mergeBy = "WBGeneID", remove_miRNA = TRUE, tolerance = 1)
-
-gR <- polishNetwork(cifNetwork=cifNetwork,
-                  nodecolor=colorRampPalette(c("green", 
-                                               "yellow", 
-                                               "red"))(2594))
-gR
-# this is too big to make
-#(html <- browseNetwork(gR, maxNodes = 2594))
 
 ```
 
-Make a network with stricter cutoffs
-
-```{r}
-data("ce.IDsMap")
-data("ce.mapIDs")
-sifNetwork <- buildNetwork(TFbindingTable = l1_peak_genes_GNB, interactionmap = ce.interactionmap, level = 2)
-
-cifNetwork <- filterNetwork(rootgene = "WBGene00001250", sifNetwork = sifNetwork, exprsData = betaDE, mergeBy = "WBGeneID", remove_miRNA = TRUE, tolerance = 1, cutoffPVal = 0.01, cutoffLFC = 2)
-
-cifNetwork <- convertID(cifNetwork, ce.mapIDs, ByName = c("from", "to"))
-
-gR <- polishNetwork(na.omit(cifNetwork), nodecolor = colorRampPalette(c("green", "yellow", "red"))(10))
-gR
-
-elt2network <- browseNetwork(gR, maxNodes = 528)
-
-exportNetwork(elt2network, "./04_GeneNetworkBuilder/elt2network.html")
-```
-
-This is very messy. Subset more
-
-```{r}
-cifNetwork %>% filter(from == c("elt-2", "pqm-1", "pha-4"), logFC >= 1)
-
-gR <- polishNetwork(cifNetwork %>% filter(from == c("elt-2", "zip-10"), logFC >= 1),
-                    nodecolor = colorRampPalette(c("green", "yellow", "red"))(10))
-browseNetwork(gR)
-
-gR_pqm1 <- polishNetwork(na.omit(cifNetwork %>% filter(from == c("elt-2", "pqm-1"))),
-                    nodecolor = colorRampPalette(c("green", "yellow", "red"))(10))
-
-browseNetwork(gR_pqm1)
-
-gR_skn1 <- polishNetwork(na.omit(cifNetwork %>% filter(from == c("elt-2", "skn-1"))),
-                    nodecolor = colorRampPalette(c("green", "yellow", "red"))(10))
-
-browseNetwork(gR_skn1)
-
-elt2_pqm1_network <- browseNetwork(gR_pqm1)
-exportNetwork(elt2_pqm1_network, "elt2_pqm1_network.html")
-
-exportNetwork(gR_skn1, "elt2_skn1_network.html")
-```
 
