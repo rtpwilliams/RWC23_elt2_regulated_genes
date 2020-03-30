@@ -253,7 +253,7 @@ This section will integrate the L1 stage ELT-2 ChIP data analyzed by David.
 Load in data.
 
 ```{r}
-elt2_peaks <- read_excel("2020_03_27_peaks.xlsx")
+elt2_peaks <- read_excel("./01_input/2020_03_27_peaks.xlsx")
 
 # Subset for genes bound in the L1 stage
 elt2_L1_peaks <- elt2_peaks %>% select(mapped_gene, L1) %>% filter(L1 == 1) %>% select(mapped_gene)
@@ -326,7 +326,8 @@ pheatmap(rowNormGeneNameMatrix,
          cluster_rows = TRUE, 
          show_rownames = TRUE, 
          border_color = NA,
-         cellheight = 10)
+         cellheight = 10,
+         filename = "./03_plots/200327_L1_Elt2_Bound_Regulated_Genes_Row_Normalized.pdf")
 
 ```
 
@@ -351,7 +352,7 @@ pheatmap(elt2_bound_TF_rowNorm_matrix,
          show_rownames = TRUE, 
          border_color = NA,
          cellheight = 10,
-         filename = "./200328_L1_Elt2_Bound_Regulated_TFs_Row_Normalized_Heatmap.pdf")
+         filename = "./03_plots/200328_L1_Elt2_Bound_Regulated_TFs_Row_Normalized_Heatmap.pdf")
 ```
 
 
@@ -384,7 +385,7 @@ pheatmap(elt2_bound_TF_zscore_matrix,
          show_rownames = TRUE, 
          border_color = NA,
          cellheight = 10,
-         filename = "./200328_L1_Elt2_Bound_Regulated_TFs_Zscore_Heatmap.pdf")
+         filename = "./03_plots/200328_L1_Elt2_Bound_Regulated_TFs_Zscore_Heatmap.pdf")
 ```
 
 Do it for all genes.  
@@ -403,6 +404,14 @@ pheatmap(elt2bound_zscore_matrix,
          show_rownames = TRUE, 
          border_color = NA,
          cellheight = 10,
-         filename = "./200327_L1_Elt2_Bound_Regulated_Genes_Zscore_Heatmap.pdf")
+         filename = "./03_plots/200327_L1_Elt2_Bound_Regulated_Genes_Zscore_Heatmap.pdf")
+```
+
+# Session info
+
+Document session info.  
+
+```{r}
+sessionInfo()
 ```
 
