@@ -13,13 +13,12 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Next steps
 HIGH
-- Do Z score of row normalization, divide by the standard deviation
+- perform GO on up and down regulated genes
 LOW
-- perform GO
-- figure out rankings of gonad genes, then test most upregulated in elt-2(-)
-- figure out rankings of normally expressed genes, then test most upregulated in elt-2(-)
-- figure out which are transcription factors, test if combo RNAi of elt-2 and those TFs reduce normally expressed intestine overexpression
+- elt-2 chip or promoter motifs of up and down regulated genes
 
+# Done steps
+- Do Z score of row normalization, divide by the standard deviation
 
 # Improvements
 
@@ -33,6 +32,7 @@ library(DESeq2)
 library(tidyverse)
 library(pheatmap)
 library(readxl)
+library(matrixStats)
 ```
 
 
@@ -261,66 +261,148 @@ elt2_L1_peaks <- elt2_peaks %>% select(mapped_gene, L1) %>% filter(L1 == 1) %>% 
 
 Now subset the row normalized set expression set for these genes.
 
-```{r}
-nameselect <- rownames(assay(rld)) %in% elt2_L1_peaks$mapped_gene
+Make a function to subset and process the matrix.  
 
-nameMatrix <- assay(rld)[nameselect,]
+```{r make-matrix-select-function}
 
-dim(nameMatrix)
+matrix_select <- function(count_matrix, gene_subset_vector){
+  nameselect <- rownames(count_matrix) %in% gene_subset_vector
+  nameMatrix <- count_matrix[nameselect,]
+  return(nameMatrix)
+}
 
-varselect <- rowVars(nameMatrix) >= 0.5
+row_normalize_matrix <- function(count_matrix, variance_cutoff){
+  varselect <- rowVars(count_matrix) >= variance_cutoff
+  count_matrix <- count_matrix[varselect, ]
+  namevarRowNormalized <- count_matrix - rowMeans(count_matrix)
+  return(namevarRowNormalized)
+  #head(nameMatrix)
+}
+```
 
-namevarMatrix <- nameMatrix[varselect, ]
+Use the functions to subset and row normalize the matrix.  
 
-c(dim(nameMatrix), dim(namevarMatrix))
+```{r subset-rownorm-elt2-bound}
+elt2_bound_matrix <- matrix_select(assay(rld), elt2_L1_peaks$mapped_gene)
 
-namevarRowNormalized <- namevarMatrix - rowMeans(namevarMatrix) # also try to divide by standard deviation
+elt2bound_rownormMatrix <- row_normalize_matrix(
+  count_matrix = elt2_bound_matrix, 
+  variance_cutoff =  0.5
+  )
 
-head(rownames(namevarRowNormalized))
+head(elt2bound_rownormMatrix)
+```
 
-# Replace WBGeneID row name with gene name
+Make a function to replace rowname WBGeneID with Gene Name.  
 
-# download list of WBGeneIDs and gene names based on presence in this matrix
-paramart <- useMart("parasite_mart", dataset = "wbps_gene", host = "https://parasite.wormbase.org", port = 443)
-id2name <- biomaRt::getBM(mart = paramart, 
+```{r make-id2name-function}
+
+id2name <- function(count_matrix){
+  id2name.df <- suppressMessages(biomaRt::getBM(mart = paramart, 
                filter=c("wbps_gene_id"), 
-               value=rownames(namevarRowNormalized), 
+               value=rownames(count_matrix), 
                           attributes = c('wbps_gene_id','external_gene_id')
-                          )
-# Duplicate the matrix
-namevarRowNormalizedGenename <- namevarRowNormalized
+                          ))
+  rownames(count_matrix) <- id2name.df$external_gene_id[ 
+    match(rownames(count_matrix), id2name.df$wbps_gene_id)
+    ]
+  return(count_matrix)
+}
+```
 
-# Replace the row names of this new matrix based on the matching row in id2name
-rownames(namevarRowNormalizedGenename) <- id2name$external_gene_id[ match(rownames(namevarRowNormalized), id2name$wbps_gene_id)]
+Replace the WBGeneIDs in the row name with gene names. 
 
-# Spot check that renaming is done correctly. Use `wormbase.org` as reference.
-num <- 100
-c(rownames(namevarRowNormalized)[num], rownames(namevarRowNormalizedGenename)[num])
+```{r gene-rowname}
+rowNormGeneNameMatrix <- id2name(rownormMatrix)
 
-pheatmap(namevarRowNormalizedGenename, 
+head(rowNormGeneNameMatrix)
+```
+
+Now plot a heatmap of ELT-2 regulated genes.  
+
+```{r plot-elt2-regulated-heatmap}
+pheatmap(rowNormGeneNameMatrix, 
+         cluster_cols = FALSE, 
+         cluster_rows = TRUE, 
+         show_rownames = TRUE, 
+         border_color = NA,
+         cellheight = 10)
+
+```
+
+
+Do a similar analysis for TFs only.  
+
+```{r process-elt2-regulated-tfs}
+
+elt2_bound_TF_matrix <- matrix_select(count_matrix = elt2_bound_matrix, gene_subset_vector = wTF3.0$WBGeneID)
+
+elt2_bound_TF_rowNorm_matrix <- row_normalize_matrix(
+  count_matrix = elt2_bound_TF_matrix, 
+  variance_cutoff =  0.1
+  )
+
+
+elt2_bound_TF_rowNorm_matrix <- id2name(elt2_bound_TF_rowNorm_matrix)
+
+pheatmap(elt2_bound_TF_rowNorm_matrix, 
          cluster_cols = FALSE, 
          cluster_rows = TRUE, 
          show_rownames = TRUE, 
          border_color = NA,
          cellheight = 10,
-         filename = "./200327_L1_Elt2_Bound_Regulated_Genes_Row_Normalized.pdf")
-
-
+         filename = "./200328_L1_Elt2_Bound_Regulated_TFs_Row_Normalized_Heatmap.pdf")
 ```
 
-Do a similar analysis for TFs only.  
 
-```{r}
-tfselect <- rownames(assay(rld)) %in% wTF3.0$WBGeneID
+Now try Z scores.
 
-tfMatrix <- assay(rld)[tfselect,]
+```{r zscore-function}
 
-tfvarselect <- rowVars(tfMatrix) >= 0
-
-tfvarMatrix <- tfMatrix[tfvarselect, ]
-
-
-
+row_zscore_matrix <- function(count_matrix, variance_cutoff){
+  varselect <- rowVars(count_matrix) >= variance_cutoff
+  count_matrix <- count_matrix[varselect, ]
+  namevarZscore <- (count_matrix - rowMeans(count_matrix))/rowSds(count_matrix)
+  return(namevarZscore)
+ 
+}
 ```
 
+Do it for transcription factors.
+
+```{r tf-zscore-heatmap}
+elt2_bound_TF_zscore_matrix <- row_zscore_matrix(
+  count_matrix = elt2_bound_TF_matrix, 
+  variance_cutoff =  0.1
+  )
+
+elt2_bound_TF_zscore_matrix <- id2name(elt2_bound_TF_zscore_matrix)
+
+pheatmap(elt2_bound_TF_zscore_matrix, 
+         cluster_cols = FALSE, 
+         cluster_rows = TRUE, 
+         show_rownames = TRUE, 
+         border_color = NA,
+         cellheight = 10,
+         filename = "./200328_L1_Elt2_Bound_Regulated_TFs_Zscore_Heatmap.pdf")
+```
+
+Do it for all genes.  
+
+```{r genes-zscore-heatmap}
+elt2bound_zscore_matrix <- row_zscore_matrix(
+  count_matrix = elt2_bound_matrix, 
+  variance_cutoff =  0.5
+  )
+
+elt2bound_zscore_matrix <- id2name(elt2bound_zscore_matrix)
+
+pheatmap(elt2bound_zscore_matrix, 
+         cluster_cols = FALSE, 
+         cluster_rows = TRUE, 
+         show_rownames = TRUE, 
+         border_color = NA,
+         cellheight = 10,
+         filename = "./200327_L1_Elt2_Bound_Regulated_Genes_Zscore_Heatmap.pdf")
+```
 
