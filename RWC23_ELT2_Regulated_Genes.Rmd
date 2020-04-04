@@ -417,7 +417,7 @@ pheatmap(elt2bound_zscore_matrix,
          cluster_rows = TRUE, 
          show_rownames = FALSE, 
          border_color = NA)#,
-         #cellheight = 10,
+         #cellheight = 10,    #420!!
          #filename = "./03_plots/200327_L1_Elt2_Bound_Regulated_Genes_Zscore_Heatmap.pdf")
 ```
 
