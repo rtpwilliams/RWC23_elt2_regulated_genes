@@ -295,7 +295,7 @@ Use the functions to subset and row normalize the matrix.
 ```{r subset-rownorm-elt2-bound}
 elt2_bound_matrix <- matrix_select(assay(rld), elt2_L1_peaks$mapped_gene)
 
-elt2bound_rownormMatrix <- row_normalize_matrix(
+elt2bound_rownormMatrix <- row_normalize_matrix_cutoff(
   count_matrix = elt2_bound_matrix, 
   variance_cutoff =  0.5
   )
@@ -351,7 +351,7 @@ Do a similar analysis for TFs only.
 
 elt2_bound_TF_matrix <- matrix_select(count_matrix = elt2_bound_matrix, gene_subset_vector = wTF3.0$WBGeneID)
 
-elt2_bound_TF_rowNorm_matrix <- row_normalize_matrix(
+elt2_bound_TF_rowNorm_matrix <- row_normalize_matrix_cutoff(
   count_matrix = elt2_bound_TF_matrix, 
   variance_cutoff =  0.1
   )
@@ -383,10 +383,11 @@ row_zscore_matrix <- function(count_matrix, variance_cutoff){
 }
 ```
 -->
+
 Do it for transcription factors.
 
 ```{r tf-zscore-heatmap}
-elt2_bound_TF_zscore_matrix <- row_zscore_matrix(
+elt2_bound_TF_zscore_matrix <- row_zscore_matrix_cutoff(
   count_matrix = elt2_bound_TF_matrix, 
   variance_cutoff =  0.1
   )
@@ -405,7 +406,7 @@ pheatmap(elt2_bound_TF_zscore_matrix,
 Do it for all genes.  
 
 ```{r genes-zscore-heatmap}
-elt2bound_zscore_matrix <- row_zscore_matrix(
+elt2bound_zscore_matrix <- row_zscore_matrix_cutoff(
   count_matrix = elt2_bound_matrix, 
   variance_cutoff =  0.5
   )
@@ -420,6 +421,82 @@ pheatmap(elt2bound_zscore_matrix,
          #cellheight = 10,    #420!!
          #filename = "./03_plots/200327_L1_Elt2_Bound_Regulated_Genes_Zscore_Heatmap.pdf")
 ```
+
+# Use pairwise differential expression as regulated gene filter
+
+Load in data.  
+
+```{r}
+up_in_wt_v_elt2 <- read_excel("01_input/Table_S4_Pairwise_Diff_Expression.xlsx", 
+    sheet = "1_up_in_wt_v_elt2", col_names = FALSE)
+
+down_in_wt_v_elt2 <- read_excel("01_input/Table_S4_Pairwise_Diff_Expression.xlsx", 
+    sheet = "2_down_in_wt_v_elt2", col_names = FALSE)
+
+up_in_wt_v_elt7 <- read_excel("01_input/Table_S4_Pairwise_Diff_Expression.xlsx", 
+    sheet = "3_up_in_wt_v_elt7", col_names = FALSE)
+
+up_in_wt_v_elt7elt2 <- read_excel("01_input/Table_S4_Pairwise_Diff_Expression.xlsx", 
+    sheet = "5_up_in_wt_v_elt7elt2", col_names = FALSE)
+
+down_in_wt_v_elt7elt2 <- read_excel("01_input/Table_S4_Pairwise_Diff_Expression.xlsx", 
+    sheet = "6_down_in_wt_v_elt7elt2", col_names = FALSE)
+
+up_in_elt2_v_elt7elt2 <- read_excel("01_input/Table_S4_Pairwise_Diff_Expression.xlsx", 
+    sheet = "7_up_in_elt2_v_elt7elt2", col_names = FALSE)
+
+down_in_elt2_v_elt7elt2 <- read_excel("01_input/Table_S4_Pairwise_Diff_Expression.xlsx", 
+    sheet = "8_down_in_elt2_v_elt7elt2", col_names = FALSE)
+
+colnames(up_in_wt_v_elt2) <- c("WBGeneID")
+colnames(down_in_wt_v_elt2) <- c("WBGeneID")
+colnames(up_in_wt_v_elt7) <- c("WBGeneID")
+colnames(up_in_wt_v_elt7elt2) <- c("WBGeneID")
+colnames(down_in_wt_v_elt7elt2) <- c("WBGeneID")
+colnames(up_in_elt2_v_elt7elt2) <- c("WBGeneID")
+colnames(down_in_elt2_v_elt7elt2) <- c("WBGeneID")
+```
+
+Make a union of these lists with unique WBGeneIDs.  
+
+```{r}
+union_elt2elt7_DE <- data.frame(WBGeneID = c(up_in_wt_v_elt2$WBGeneID, 
+                        down_in_wt_v_elt2$WBGeneID,
+                        up_in_wt_v_elt7$WBGeneID,
+                        up_in_wt_v_elt7elt2$WBGeneID,
+                        down_in_wt_v_elt7elt2$WBGeneID,
+                        up_in_elt2_v_elt7elt2$WBGeneID,
+                        down_in_elt2_v_elt7elt2$WBGeneID
+                        )) %>% unique()
+```
+
+Subset count matrix for presence in union of all pairwise comparisons.  
+
+```{r}
+all_pairwise_subset <- matrix_select(assay(rld), union_elt2elt7_DE$WBGeneID)
+
+all_pairwise_subset_rownorm <- row_normalize_matrix(all_pairwise_subset)
+
+myPheatmap(all_pairwise_subset_rownorm)
+```
+
+Hard to see anything useful with this.  
+
+Do the same thing but use Z score. Maybe there will be more detail.  
+
+```{r}
+all_pairwise_subset_Zscore <- row_zscore_matrix(all_pairwise_subset)
+
+# remove columns with NA
+all_pairwise_subset_Zscore <- all_pairwise_subset_Zscore[complete.cases(all_pairwise_subset_Zscore), ]
+
+unique(is.na(all_pairwise_subset_Zscore))
+
+myPheatmap(all_pairwise_subset_Zscore)
+```
+
+Clusters are a little more obvious.  
+
 
 # Session info
 
