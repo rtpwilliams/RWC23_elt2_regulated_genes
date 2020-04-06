@@ -69,3 +69,11 @@ myPheatmap <- function(count_matrix){
            show_rownames = FALSE, 
            border_color = NA)
 }
+
+mysmallPheatmap <- function(count_matrix){
+  pheatmap(count_matrix, 
+           cluster_cols = FALSE, 
+           cluster_rows = TRUE, 
+           show_rownames = TRUE, 
+           border_color = NA)
+}

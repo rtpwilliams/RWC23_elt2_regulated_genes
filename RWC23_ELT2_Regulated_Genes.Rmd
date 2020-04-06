@@ -266,29 +266,7 @@ elt2_L1_peaks <- elt2_peaks %>% select(mapped_gene, L1) %>% filter(L1 == 1) %>% 
 
 ```
 
-Now subset the row normalized set expression set for these genes.
-
-<!--
-Make a function to subset and process the matrix.  
-These functions now live in 
-
-```{r make-matrix-select-function}
-
-matrix_select <- function(count_matrix, gene_subset_vector){
-  nameselect <- rownames(count_matrix) %in% gene_subset_vector
-  nameMatrix <- count_matrix[nameselect,]
-  return(nameMatrix)
-}
-
-row_normalize_matrix <- function(count_matrix, variance_cutoff){
-  varselect <- rowVars(count_matrix) >= variance_cutoff
-  count_matrix <- count_matrix[varselect, ]
-  namevarRowNormalized <- count_matrix - rowMeans(count_matrix)
-  return(namevarRowNormalized)
-  #head(nameMatrix)
-}
-```
--->
+Now subset the row normalized set expression set for these genes.  
 
 Use the functions to subset and row normalize the matrix.  
 
@@ -302,26 +280,6 @@ elt2bound_rownormMatrix <- row_normalize_matrix_cutoff(
 
 head(elt2bound_rownormMatrix)
 ```
-
-
-<!--
-Make a function to replace rowname WBGeneID with Gene Name.  
-This function now lives in RWC23_Functions.R
-```{r make-id2name-function}
-
-id2name <- function(count_matrix){
-  id2name.df <- suppressMessages(biomaRt::getBM(mart = paramart, 
-               filter=c("wbps_gene_id"), 
-               value=rownames(count_matrix), 
-                          attributes = c('wbps_gene_id','external_gene_id')
-                          ))
-  rownames(count_matrix) <- id2name.df$external_gene_id[ 
-    match(rownames(count_matrix), id2name.df$wbps_gene_id)
-    ]
-  return(count_matrix)
-}
-```
--->
 
 Replace the WBGeneIDs in the row name with gene names. 
 
@@ -367,22 +325,6 @@ pheatmap(elt2_bound_TF_rowNorm_matrix,
          #cellheight = 10,
          #filename = "./03_plots/200331_L1_Elt2_Elt7_Bound_Regulated_TFs_Row_Normalized_Heatmap.pdf")
 ```
-
-<!--
-Now try Z scores.
-This function now lives in RWC23_Functions.R  
-
-```{r zscore-function}
-
-row_zscore_matrix <- function(count_matrix, variance_cutoff){
-  varselect <- rowVars(count_matrix) >= variance_cutoff
-  count_matrix <- count_matrix[varselect, ]
-  namevarZscore <- (count_matrix - rowMeans(count_matrix))/rowSds(count_matrix)
-  return(namevarZscore)
- 
-}
-```
--->
 
 Do it for transcription factors.
 
@@ -475,6 +417,11 @@ Subset count matrix for presence in union of all pairwise comparisons.
 ```{r}
 all_pairwise_subset <- matrix_select(assay(rld), union_elt2elt7_DE$WBGeneID)
 
+row_normalize_matrix <- function(count_matrix){
+  namevarRowNormalized <- count_matrix - rowMeans(count_matrix)
+  return(namevarRowNormalized)
+}
+
 all_pairwise_subset_rownorm <- row_normalize_matrix(all_pairwise_subset)
 
 myPheatmap(all_pairwise_subset_rownorm)
@@ -496,6 +443,25 @@ myPheatmap(all_pairwise_subset_Zscore)
 ```
 
 Clusters are a little more obvious.  
+
+Now subset the plot for ELT-2 binding in the L1 stage.  
+
+```{r}
+elt2bound_all_pairwise_subset_Zscore <- matrix_select(all_pairwise_subset_Zscore, elt2_L1_peaks$mapped_gene)
+
+myPheatmap(elt2bound_all_pairwise_subset_Zscore)
+```
+
+Now subset for genes that are transcription factors.  
+
+```{r}
+elt2bound_all_pairwise_subset_Zscore_TF <- matrix_select(elt2bound_all_pairwise_subset_Zscore, wTF3.0$WBGeneID)
+
+elt2bound_all_pairwise_subset_Zscore_TF <- id2name(elt2bound_all_pairwise_subset_Zscore_TF)
+
+mysmallPheatmap(elt2bound_all_pairwise_subset_Zscore_TF)
+
+```
 
 
 # Session info
