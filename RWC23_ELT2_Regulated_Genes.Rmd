@@ -7,7 +7,7 @@ output:
 
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=TRUE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
@@ -165,113 +165,41 @@ Make an MA plot for all the data.
 plotMA(res, ylim = c(-10, 10))
 ```
 
-Make a heatmap of differentially expressed genes.  
-Use variance of rlog transformed read counts to filter the data set for genes that are actually changing.  
-
-```{r}
-select <- rowVars(assay(rld)) > 0.5
-
-rowNormalized <- assay(rld)-rowMeans(assay(rld))
-
-pheatmap(rowNormalized[select, ], cluster_cols = FALSE, cluster_rows = TRUE, show_rownames = FALSE)
-
-```
+## ELT-2 Bound and Reuglated Genes
 
 
-# Determine ELT-2 regulated TFs
-
-Load in datasets
-
-```{r}
-
-res.df <- read.csv(file = "./02_DESeq2/200218_L1_wt_vs_elt2D_results.csv", header = TRUE, sep = ",", row.names = 1)
-
-res.df <- rownames_to_column(res.df, var = "WBGeneID")
-
-wTF3.0 <- read.delim("./TF3-0_namesonly.txt", header = TRUE, sep = "\t") %>% select(Sequence.name, Public_name, WBGeneID, DBD)
-
-```
-
-Subset elt-2(-) differentially expressed genes for transcription factors with wTF3.0 dataset.  
-
-```{r}
-elt2_responding_TF <- merge(wTF3.0, res.df, by.x = "WBGeneID", by.y = "WBGeneID")
-dim(elt2_responding_TF)
-head(elt2_responding_TF)
-```
-Make an MA plot of differentially expressed transcription factors.  
-
-```{r}
-threshold = 0.01
-ggplot(data = elt2_responding_TF) + 
-  geom_point(aes(x = baseMean, y = log2FoldChange, colour = cut(padj, c(-Inf, threshold, +Inf)))) +
-  scale_colour_manual(name = "padj", values = c("red", "black")
-  ) +
-  scale_x_log10() 
-```
-
-Separate dataset into activated and repressed TFs.  
-
-```{r}
-elt2_activated_TF <- elt2_responding_TF %>% filter(log2FoldChange <= 0, padj <= threshold)
-elt2_repressed_TF <- elt2_responding_TF %>% filter(log2FoldChange >= 0, padj <= threshold)
-```
-
-Make heatmap of differentially expressed TFs.  
-
-```{r}
-nameselect <- rownames(assay(rld)) %in% wTF3.0$WBGeneID 
-
-nameMatrix <- assay(rld)[nameselect,]
-
-varselect <- rowVars(nameMatrix) > 0.1
-
-namevarMatrix <- nameMatrix[varselect, ]
-
-namevarRowNormalized <- namevarMatrix - rowMeans(namevarMatrix)
-
-pheatmap(namevarRowNormalized, cluster_cols = FALSE, cluster_rows = TRUE, show_rownames = FALSE, border_color = NA)
-```
-
-Replace WBGeneID with gene name in row name.  
-
-```{r}
-rownames(namevarRowNormalized)
-
-paramart <- useMart("parasite_mart", dataset = "wbps_gene", host = "https://parasite.wormbase.org", port = 443)
-
-name2id = getBM(mart = paramart, 
-                     filter=c("species_id_1010", 
-                              "biotype"), 
-                     value=list(species_id_1010="caelegprjna13758", 
-                                biotype="protein_coding"), 
-                     attributes = c('external_gene_id', 
-                                    'wbps_gene_id'))
-head(name2id)
-
-```
-
-
-# ELT-2 Bound and Reuglated Genes
 
 This section will integrate the L1 stage ELT-2 ChIP data analyzed by David.  
 
 Load in data.
 
 ```{r}
-elt2_peaks <- read_excel("./01_input/200331_peaksForBigBed.xlsx")
+elt2_peaks <- read_excel("./01_input/200406_peaksForBigBed.xlsx")
+head(elt2_peaks)
 
+names(elt2_peaks)[names(elt2_peaks)=="WBID"] <- "WBGeneID"
+
+names(elt2_peaks)
 # Subset for genes bound in the L1 stage
-elt2_L1_peaks <- elt2_peaks %>% select(mapped_gene, L1) %>% filter(L1 == 1) %>% select(mapped_gene)
+elt2_L1_peaks <- elt2_peaks %>%
+  select(WBGeneID, L1) %>% 
+  filter(L1 == 1) %>%
+  select(WBGeneID) %>% unique()
 
+wTF3.0 <- read.csv("./01_input/TF3-0_namesonly.txt", sep = "\t", header = TRUE) %>% select(WBGeneID)
 ```
 
-Now subset the row normalized set expression set for these genes.  
+# WT and elt-2 (-) Analysis
 
-Use the functions to subset and row normalize the matrix.  
+First focus the analysis only on genes changing between wildtype and elt-2 (-) samples only.
 
-```{r subset-rownorm-elt2-bound}
-elt2_bound_matrix <- matrix_select(assay(rld), elt2_L1_peaks$mapped_gene)
+Use the functions in `RWC23_Functions.R` to subset and row normalize the matrix.  
+
+```{r}
+
+wt_elt2_counts <- subset(assay(rld), select = wt_sorted_1:elt2D_sorted_4)
+
+elt2_bound_matrix <- matrix_select(wt_elt2_counts, elt2_L1_peaks$WBGeneID)
 
 elt2bound_rownormMatrix <- row_normalize_matrix_cutoff(
   count_matrix = elt2_bound_matrix, 
@@ -283,7 +211,7 @@ head(elt2bound_rownormMatrix)
 
 Replace the WBGeneIDs in the row name with gene names. 
 
-```{r gene-rowname}
+```{r}
 elt2bound_rowNormGeneNameMatrix <- id2name(elt2bound_rownormMatrix)
 
 head(elt2bound_rowNormGeneNameMatrix)
@@ -291,21 +219,15 @@ head(elt2bound_rowNormGeneNameMatrix)
 
 Now plot a heatmap of ELT-2 regulated genes.  
 
-```{r plot-elt2-regulated-heatmap}
-pheatmap(elt2bound_rowNormGeneNameMatrix, 
-         cluster_cols = FALSE, 
-         cluster_rows = TRUE, 
-         show_rownames = FALSE, 
-         border_color = NA)#,
-         #cellheight = 10,
-         #filename = "./03_plots/200331_L1_Elt2_Elt7_Bound_Regulated_Genes_Row_Normalized_NoNames.pdf")
+```{r}
+myPheatmap(elt2bound_rowNormGeneNameMatrix, "ELT-2 Bound Differentially Expressed Genes\nRow Means Normalized\nVariance Cutoff = 0.5", 2)
 
 ```
 
 
 Do a similar analysis for TFs only.  
 
-```{r process-elt2-regulated-tfs}
+```{r}
 
 elt2_bound_TF_matrix <- matrix_select(count_matrix = elt2_bound_matrix, gene_subset_vector = wTF3.0$WBGeneID)
 
@@ -317,18 +239,14 @@ elt2_bound_TF_rowNorm_matrix <- row_normalize_matrix_cutoff(
 
 elt2_bound_TF_rowNorm_matrix <- id2name(elt2_bound_TF_rowNorm_matrix)
 
-pheatmap(elt2_bound_TF_rowNorm_matrix, 
-         cluster_cols = FALSE, 
-         cluster_rows = TRUE, 
-         show_rownames = TRUE, 
-         border_color = NA)#,
-         #cellheight = 10,
-         #filename = "./03_plots/200331_L1_Elt2_Elt7_Bound_Regulated_TFs_Row_Normalized_Heatmap.pdf")
+mysmallPheatmap(elt2_bound_TF_rowNorm_matrix, "ELT-2 Bound Differentially Expressed TFs\nRow Means Normalized\nVariance Cutoff = 0.1", 2)
+
+
 ```
 
 Do it for transcription factors.
 
-```{r tf-zscore-heatmap}
+```{r}
 elt2_bound_TF_zscore_matrix <- row_zscore_matrix_cutoff(
   count_matrix = elt2_bound_TF_matrix, 
   variance_cutoff =  0.1
@@ -336,18 +254,15 @@ elt2_bound_TF_zscore_matrix <- row_zscore_matrix_cutoff(
 
 elt2_bound_TF_zscore_matrix <- id2name(elt2_bound_TF_zscore_matrix)
 
-pheatmap(elt2_bound_TF_zscore_matrix, 
-         cluster_cols = FALSE, 
-         cluster_rows = TRUE, 
-         show_rownames = TRUE, 
-         border_color = NA)#,
-         #cellheight = 10,
-         #filename = "./03_plots/200328_L1_Elt2_Bound_Regulated_TFs_Zscore_Heatmap.pdf")
+mysmallPheatmap(elt2_bound_TF_zscore_matrix, 
+           title = "ELT-2 Bound Differentially Expressed TFs\nRow Z Score Normalized\nVariance Cutoff = 0.1",
+           rowspace = 2)
+
 ```
 
-Do it for all genes.  
+Do Z Score normalization for all genes.  
 
-```{r genes-zscore-heatmap}
+```{r}
 elt2bound_zscore_matrix <- row_zscore_matrix_cutoff(
   count_matrix = elt2_bound_matrix, 
   variance_cutoff =  0.5
@@ -355,13 +270,12 @@ elt2bound_zscore_matrix <- row_zscore_matrix_cutoff(
 
 elt2bound_zscore_matrix <- id2name(elt2bound_zscore_matrix)
 
-pheatmap(elt2bound_zscore_matrix, 
-         cluster_cols = FALSE, 
-         cluster_rows = TRUE, 
-         show_rownames = FALSE, 
-         border_color = NA)#,
-         #cellheight = 10,    #420!!
-         #filename = "./03_plots/200327_L1_Elt2_Bound_Regulated_Genes_Zscore_Heatmap.pdf")
+myPheatmap(elt2bound_zscore_matrix,
+           title = "ELT-2 Bound Differentially Expressed Genes
+           Row Z Score
+           Variance Cutoff = 0.5",
+           rowspace = 2)
+
 ```
 
 # Use pairwise differential expression as regulated gene filter
@@ -415,7 +329,7 @@ union_elt2elt7_DE <- data.frame(WBGeneID = c(up_in_wt_v_elt2$WBGeneID,
 Subset count matrix for presence in union of all pairwise comparisons.  
 
 ```{r}
-all_pairwise_subset <- matrix_select(assay(rld), union_elt2elt7_DE$WBGeneID)
+all_pairwise_subset <- matrix_select(wt_elt2_counts, union_elt2elt7_DE$WBGeneID)
 
 row_normalize_matrix <- function(count_matrix){
   namevarRowNormalized <- count_matrix - rowMeans(count_matrix)
@@ -424,7 +338,11 @@ row_normalize_matrix <- function(count_matrix){
 
 all_pairwise_subset_rownorm <- row_normalize_matrix(all_pairwise_subset)
 
-myPheatmap(all_pairwise_subset_rownorm)
+myPheatmap(all_pairwise_subset_rownorm,
+           title = "Genes Significantly Differentially Expressed In All
+           Pairwise Comparisons
+           Row Means Normalized",
+           rowspace = 4)
 ```
 
 Hard to see anything useful with this.  
@@ -439,17 +357,66 @@ all_pairwise_subset_Zscore <- all_pairwise_subset_Zscore[complete.cases(all_pair
 
 unique(is.na(all_pairwise_subset_Zscore))
 
-myPheatmap(all_pairwise_subset_Zscore)
+myPheatmap(all_pairwise_subset_Zscore,
+           title = "Genes with Significant DE In All Pairwise Comparisons
+           Row Z Score Normalized",
+           rowspace = 3)
 ```
 
 Clusters are a little more obvious.  
 
+Add annotation to side of heatmap that indicates binding of ELT-2 in L1 stage.  
+
+```{r}
+
+my_row_anno <- data.frame(elt2_L1_bound = ifelse(test = rownames(all_pairwise_subset_Zscore) %in% elt2_L1_peaks$WBGeneID, yes = "bound", no = "not.bound"))
+
+
+rownames(my_row_anno) <- rownames(all_pairwise_subset_Zscore)
+
+ann_colors = list(
+  elt2_L1_bound = c(bound = "green", not.bound = "black")
+)
+
+pheatmap(all_pairwise_subset_Zscore, 
+         annotation_row = my_row_anno,
+         annotation_colors = ann_colors,
+           cluster_cols = FALSE, 
+           cluster_rows = TRUE, 
+           show_rownames = FALSE, 
+           border_color = NA,
+           cutree_rows = 3,
+         main = "Genes with Significant DE In All Pairwise Comparisons
+           Row Z Score Normalized",
+         width = 6,
+         height = 6)#,
+         #file = "./03_plots/200406_All_DE_Genes_Elt2_Elt7_rowZscore_Bound_Annotation.pdf")
+
+
+```
+
+Add 0 or 1 binding value to matrix and use to separate bound and unbound in clustered heatmap.  
+
+```{r}
+all_pairwise_subset_Zscore_bindStatus <- cbind(all_pairwise_subset_Zscore, elt2Bound = ifelse(test = rownames(all_pairwise_subset_Zscore) %in% elt2_L1_peaks$WBGeneID, yes = 1, no = 0))
+
+myPheatmap(all_pairwise_subset_Zscore_bindStatus,
+           title = "clustered with binding",
+           rowspace = 1)
+```
+
+Doesn't seem to change clustering.  
+
 Now subset the plot for ELT-2 binding in the L1 stage.  
 
 ```{r}
-elt2bound_all_pairwise_subset_Zscore <- matrix_select(all_pairwise_subset_Zscore, elt2_L1_peaks$mapped_gene)
+elt2bound_all_pairwise_subset_Zscore <- matrix_select(all_pairwise_subset_Zscore, elt2_L1_peaks$WBGeneID)
 
-myPheatmap(elt2bound_all_pairwise_subset_Zscore)
+myPheatmap(elt2bound_all_pairwise_subset_Zscore,
+           title = "Differential Expression of ELT-2 Bound Genes
+           Subset: Differentially expressed in all pairwise comparisons
+           Z Score Normalized",
+           rowspace = 3)
 ```
 
 Now subset for genes that are transcription factors.  
@@ -459,10 +426,263 @@ elt2bound_all_pairwise_subset_Zscore_TF <- matrix_select(elt2bound_all_pairwise_
 
 elt2bound_all_pairwise_subset_Zscore_TF <- id2name(elt2bound_all_pairwise_subset_Zscore_TF)
 
-mysmallPheatmap(elt2bound_all_pairwise_subset_Zscore_TF)
+pheatmap(elt2bound_all_pairwise_subset_Zscore_TF,
+         cluster_rows = TRUE,
+         cluster_cols = FALSE,
+         show_rownames = TRUE,
+         border_color = NA
+)
+```
+
+
+
+# WT, elt-2 (-) and elt-2(-);elt-7(-) Analysis
+
+```{r subset-rownorm-elt2-bound}
+
+wt_elt2_elt7double_counts <-assay(rld)
+
+elt2_bound_matrix <- matrix_select(wt_elt2_elt7double_counts, elt2_L1_peaks$WBGeneID)
+
+elt2bound_rownormMatrix <- row_normalize_matrix_cutoff(
+  count_matrix = elt2_bound_matrix, 
+  variance_cutoff =  0.5
+  )
+
+head(elt2bound_rownormMatrix)
+```
+
+Replace the WBGeneIDs in the row name with gene names. 
+
+```{r gene-rowname}
+elt2bound_rowNormGeneNameMatrix <- id2name(elt2bound_rownormMatrix)
+
+head(elt2bound_rowNormGeneNameMatrix)
+```
+
+Now plot a heatmap of ELT-2 regulated genes.  
+
+```{r plot-elt2-regulated-heatmap}
+myPheatmap(elt2bound_rowNormGeneNameMatrix, "ELT-2 Bound Differentially Expressed Genes\nRow Means Normalized\nVariance Cutoff = 0.5", 2)
 
 ```
 
+
+Do a similar analysis for TFs only.  
+
+```{r process-elt2-regulated-tfs}
+
+elt2_bound_TF_matrix <- matrix_select(count_matrix = elt2_bound_matrix, gene_subset_vector = wTF3.0$WBGeneID)
+
+elt2_bound_TF_rowNorm_matrix <- row_normalize_matrix_cutoff(
+  count_matrix = elt2_bound_TF_matrix, 
+  variance_cutoff =  0.1
+  )
+
+
+elt2_bound_TF_rowNorm_matrix <- id2name(elt2_bound_TF_rowNorm_matrix)
+
+mysmallPheatmap(elt2_bound_TF_rowNorm_matrix, "ELT-2 Bound Differentially Expressed TFs\nRow Means Normalized\nVariance Cutoff = 0.1", 2)
+
+
+```
+
+Do it for transcription factors.
+
+```{r tf-zscore-heatmap}
+elt2_bound_TF_zscore_matrix <- row_zscore_matrix_cutoff(
+  count_matrix = elt2_bound_TF_matrix, 
+  variance_cutoff =  0.1
+  )
+
+elt2_bound_TF_zscore_matrix <- id2name(elt2_bound_TF_zscore_matrix)
+
+mysmallPheatmap(elt2_bound_TF_zscore_matrix, 
+           title = "ELT-2 Bound Differentially Expressed TFs\nRow Z Score Normalized\nVariance Cutoff = 0.1",
+           rowspace = 3)
+
+```
+
+Do Z Score normalization for all genes.  
+
+```{r genes-zscore-heatmap}
+elt2bound_zscore_matrix <- row_zscore_matrix_cutoff(
+  count_matrix = elt2_bound_matrix, 
+  variance_cutoff =  0.5
+  )
+
+elt2bound_zscore_matrix <- id2name(elt2bound_zscore_matrix)
+
+myPheatmap(elt2bound_zscore_matrix,
+           title = "ELT-2 Bound Differentially Expressed Genes
+           Row Z Score
+           Variance Cutoff = 0.5",
+           rowspace = 2)
+
+```
+
+# Use pairwise differential expression as regulated gene filter
+
+Data was loaded in the elt-2 (-) section above.  
+
+Subset count matrix for presence in union of all pairwise comparisons.  
+
+```{r}
+all_pairwise_subset <- matrix_select(wt_elt2_elt7double_counts, union_elt2elt7_DE$WBGeneID)
+
+row_normalize_matrix <- function(count_matrix){
+  namevarRowNormalized <- count_matrix - rowMeans(count_matrix)
+  return(namevarRowNormalized)
+}
+
+all_pairwise_subset_rownorm <- row_normalize_matrix(all_pairwise_subset)
+
+myPheatmap(all_pairwise_subset_rownorm,
+           title = "Genes Significantly Differentially Expressed In All
+           Pairwise Comparisons
+           Row Means Normalized",
+           rowspace = 1)
+```
+
+Hard to see anything useful with this.  
+
+Do the same thing but use Z score. Maybe there will be more detail.  
+
+```{r}
+all_pairwise_subset_Zscore <- row_zscore_matrix(all_pairwise_subset)
+
+# remove columns with NA
+all_pairwise_subset_Zscore <- all_pairwise_subset_Zscore[complete.cases(all_pairwise_subset_Zscore), ]
+
+unique(is.na(all_pairwise_subset_Zscore))
+
+myPheatmap(all_pairwise_subset_Zscore,
+           title = "Genes with Significant DE In All Pairwise Comparisons
+           Row Z Score Normalized",
+           rowspace = 1)
+```
+
+Clusters are a little more obvious.  
+
+Add annotation to side of heatmap that indicates binding of ELT-2 in L1 stage.  
+
+```{r}
+
+my_row_anno <- data.frame(elt2_L1_bound = ifelse(test = rownames(all_pairwise_subset_Zscore) %in% elt2_L1_peaks$WBGeneID, yes = "bound", no = "not.bound"))
+
+
+rownames(my_row_anno) <- rownames(all_pairwise_subset_Zscore)
+
+ann_colors = list(
+  elt2_L1_bound = c(bound = "green", not.bound = "black")
+)
+
+pheatmap(all_pairwise_subset_Zscore, 
+         annotation_row = my_row_anno,
+         annotation_colors = ann_colors,
+           cluster_cols = FALSE, 
+           cluster_rows = TRUE, 
+           show_rownames = FALSE, 
+           border_color = NA,
+           cutree_rows = 3,
+         main = "Genes with Significant DE In All Pairwise Comparisons
+           Row Z Score Normalized",
+         width = 6,
+         height = 6)#,
+         #file = "./03_plots/200406_All_DE_Genes_Elt2_Elt7_rowZscore_Bound_Annotation.pdf")
+
+
+```
+
+Add 0 or 1 binding value to matrix and use to separate bound and unbound in clustered heatmap.  
+
+```{r}
+all_pairwise_subset_Zscore_bindStatus <- cbind(all_pairwise_subset_Zscore, elt2Bound = ifelse(test = rownames(all_pairwise_subset_Zscore) %in% elt2_L1_peaks$WBGeneID, yes = 1, no = 0))
+
+myPheatmap(all_pairwise_subset_Zscore_bindStatus,
+           title = "clustered with binding",
+           rowspace = 1)
+```
+
+Doesn't seem to change clustering.  
+
+Now subset the plot for ELT-2 binding in the L1 stage.  
+
+```{r}
+elt2bound_all_pairwise_subset_Zscore <- matrix_select(all_pairwise_subset_Zscore, elt2_L1_peaks$WBGeneID)
+
+myPheatmap(elt2bound_all_pairwise_subset_Zscore,
+           title = "Differential Expression of ELT-2 Bound Genes
+           Subset: Differentially expressed in all pairwise comparisons
+           Z Score Normalized",
+           rowspace = 4)
+```
+
+Now subset for genes that are transcription factors.  
+
+```{r}
+elt2bound_all_pairwise_subset_Zscore_TF <- matrix_select(elt2bound_all_pairwise_subset_Zscore, wTF3.0$WBGeneID)
+
+elt2bound_all_pairwise_subset_Zscore_TF <- id2name(elt2bound_all_pairwise_subset_Zscore_TF)
+
+pheatmap(elt2bound_all_pairwise_subset_Zscore_TF,
+         cluster_rows = TRUE,
+         cluster_cols = FALSE,
+         show_rownames = TRUE,
+         border_color = NA,
+         cutree_rows = 2,
+         main = "Differential Expression of ELT-2 bound Transcription Factors
+         Subset of Significant DE In All Pairwise Comparisons
+         Row Z Score Normalization"
+)
+```
+
+Add intestine expressed annotation to rows. From the project RWC19 aka TF_TEAM.
+
+Load in data.  
+
+```{r}
+spencerLEgenes <- read.table("/Users/rtpw/Documents/12_GITHUB_REPO/TF_Team/02_Data/6_Spencer_et_al_2010_FACS_and_pulldown_tilling_array/LE-intestine_enr_vs_ref.WS200.txt", quote="\"", comment.char="", header = TRUE)
+colnames(spencerLEgenes) <- str_c("spencer_LE_", colnames(spencerLEgenes))
+spencer_LE_subset <- spencerLEgenes %>% select(spencer_LE_ID, spencer_LE_AveExpr, spencer_LE_adj_P_Val, spencer_LE_FC)
+
+spencerL2genes <- read.table("/Users/rtpw/Documents/12_GITHUB_REPO/TF_Team/02_Data/6_Spencer_et_al_2010_FACS_and_pulldown_tilling_array/L2-intestine_enr_vs_ref.WS200.txt", quote="\"", comment.char="", header = TRUE)
+colnames(spencerL2genes) <- str_c("spencer_L2_", colnames(spencerL2genes))
+spencer_L2_subset <- spencerL2genes %>% select(spencer_L2_ID, spencer_L2_AveExpr, spencer_L2_adj_P_Val, spencer_L2_FC)
+```
+
+Add an annotation column for late embryo and larval stage 2 intestine expression.  
+
+```{r}
+
+bound_expressed_annotation <- cbind(my_row_anno, 
+                                    LE.Intestine = ifelse(test = rownames(all_pairwise_subset_Zscore) %in% spencer_LE_subset$spencer_LE_ID, yes = "enriched", no = "depleted"),
+                                    L2.Intestine = ifelse(test = rownames(all_pairwise_subset_Zscore) %in% spencer_L2_subset$spencer_L2_ID, yes = "enriched", no = "depleted"))
+
+bound_expressed_annotation %>% head()
+bound_expressed_ann_colors <- list(
+  elt2_L1_bound = c(bound = "green", not.bound = "black"), 
+  LE.Intestine = c(enriched = "blue", depleted = "white"), 
+  L2.Intestine = c(enriched = "blue", depleted = "white")
+  )
+
+
+pheatmap(all_pairwise_subset_Zscore, 
+         annotation_row = bound_expressed_annotation,
+         annotation_colors = bound_expressed_ann_colors,
+           cluster_cols = FALSE, 
+           cluster_rows = TRUE, 
+           show_rownames = FALSE, 
+           border_color = NA,
+         cutree_rows = 3,
+         main = "Genes with Significant DE In All Pairwise Comparisons
+           Row Z Score Normalized",
+         width = 6,
+         height = 6)#,
+         #file = "./03_plots/200409_All_DE_Genes_Elt2_Elt7_rowZscore_Bound_Expressed_Annotation.pdf")
+
+
+```
 
 # Session info
 

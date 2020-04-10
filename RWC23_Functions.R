@@ -49,6 +49,7 @@ row_zscore_matrix_cutoff <- function(count_matrix, variance_cutoff){
 # This function requires access to the internet for proper funcitoning.
 
 id2name <- function(count_matrix){
+  paramart <- useMart("parasite_mart", dataset = "wbps_gene", host = "https://parasite.wormbase.org", port = 443)
   id2name.df <- suppressMessages(biomaRt::getBM(mart = paramart, 
                                                 filter=c("wbps_gene_id"), 
                                                 value=rownames(count_matrix), 
@@ -62,18 +63,22 @@ id2name <- function(count_matrix){
 
 # myPheatmap() is a custom pheatmap plotting function
 
-myPheatmap <- function(count_matrix){
+myPheatmap <- function(count_matrix, title, rowspace){
   pheatmap(count_matrix, 
            cluster_cols = FALSE, 
            cluster_rows = TRUE, 
            show_rownames = FALSE, 
-           border_color = NA)
+           border_color = NA,
+           main = title,
+           cutree_rows = rowspace)
 }
 
-mysmallPheatmap <- function(count_matrix){
+mysmallPheatmap <- function(count_matrix, title, rowspace){
   pheatmap(count_matrix, 
            cluster_cols = FALSE, 
            cluster_rows = TRUE, 
            show_rownames = TRUE, 
-           border_color = NA)
+           border_color = NA,
+           main = title,
+           cutree_rows = rowspace)
 }
