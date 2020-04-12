@@ -80,5 +80,6 @@ mysmallPheatmap <- function(count_matrix, title, rowspace){
            show_rownames = TRUE, 
            border_color = NA,
            main = title,
+           cellheight = 10,
            cutree_rows = rowspace)
 }
