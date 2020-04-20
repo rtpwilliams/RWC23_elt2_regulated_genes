@@ -1,0 +1,202 @@
+---
+title: "RWC23_ELT2_Regulated_Genes_DNetal_clusters"
+author: "RTPW"
+date: "4/13/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Package Libraries
+
+```{r}
+library(biomaRt)
+library(tidyverse)
+library(pheatmap)
+library(readxl)
+library(ComplexHeatmap)
+library(matrixStats)
+```
+
+# Source functions
+
+```{r}
+source("./RWC23_Functions.R")
+```
+
+## Load and Process Datasets
+
+# Load Dineen and Osborne Nishimura et. al. Data
+
+rlog normalized counts
+
+```{r}
+dineen_nishimura_counts <- read_xlsx(path = "./01_input/Table_S2_rlog_Stabilized_Read_Counts.xlsx", 
+                                     sheet = "Sheet1")
+
+dineen_nishimura_counts_matrix <- dineen_nishimura_counts %>% 
+  column_to_rownames(var = "WBGeneID")  %>% 
+  data.matrix()
+
+dineen_nishimura_counts_matrix %>% head
+```
+
+list of all dynamically expressed genes
+
+```{r}
+dynamic_regulated_genes <- read.table(file = "./05_fromErin/2017-11-20_all_changing_genes_0.1alpha_0.8lfc.txt",
+                                      quote = "",
+                                      header = FALSE)
+colnames(dynamic_regulated_genes) <- "WBGeneID"
+
+dynamic_regulated_genes %>% head
+```
+
+
+```{r}
+dineen_nishimura_clusters <- read_xlsx(path = "./01_input/Table_S6_All_Dynamically_Expressed_Genes_Clusters.xlsx", 
+                                       sheet = "dataset")
+names(dineen_nishimura_clusters)
+
+dineen_nishimura_clusters %>% select(WBGeneID, set) %>% head
+```
+
+# Load ELT-2 ChIP-seq binding annotations
+
+```{r}
+elt2_peaks <- read_xlsx("./01_input/200410_peaksForBigBed.xlsx", sheet = "full cluster assignment")
+
+colnames(elt2_peaks) <- c("chrom", "start", "end", "peak.name", "WBGeneID", "mapping", "cluster", "cluster.description", "kweight", "LE", "L1", "L3", "peak.summit.agreement")
+
+elt2_peaks$cluster.description <- factor(elt2_peaks$cluster.description, 
+                                         levels = c(
+                                           "Not-changing or not IDR-passing",
+                                           "L3-high",
+                                           "Increasing",
+                                           "Post-embryonic",
+                                           "LE-specific"
+                                         ), labels = c(
+                                           "NotChanging",
+                                           "L3high",
+                                           "Increasing",
+                                           "PostEmbryonic",
+                                           "LEspecific")
+                                         )
+
+elt2_peaks %>% head
+```
+
+Make a set of genes with ELT-2 binding detected in the L1 stage.  
+
+```{r}
+elt2_peaks %>% dim
+
+elt2_detected_in_L1 <- elt2_peaks %>% select(WBGeneID, L1) %>% select(WBGeneID) %>% unique()
+
+elt2_detected_in_L1 %>% dim
+```
+Make a dataframe that records the number of peaks per gene that fall in a particular binding catagory.
+
+```{r}
+binding_cluster_gene_counts <- table(elt2_peaks$WBGeneID, elt2_peaks$cluster.description)
+binding_cluster_gene_counts <- as.data.frame.matrix(binding_cluster_gene_counts)
+binding_cluster_gene_counts
+```
+
+
+# Load Spencer et. al. intestine expression
+
+```{r}
+spencerLEgenes <- read.table("../../12_GITHUB_REPO/TF_Team/02_Data/6_Spencer_et_al_2010_FACS_and_pulldown_tilling_array/LE-intestine_enr_vs_ref.WS200.txt", quote="\"", comment.char="", header = TRUE)
+colnames(spencerLEgenes) <- str_c("spencer_LE_", colnames(spencerLEgenes))
+spencer_LE_subset <- spencerLEgenes %>% select(spencer_LE_ID, spencer_LE_AveExpr, spencer_LE_adj_P_Val, spencer_LE_FC)
+
+spencer_LE_subset %>% head
+```
+
+```{r}
+spencerL2genes <- read.table("../../12_GITHUB_REPO/TF_Team/02_Data/6_Spencer_et_al_2010_FACS_and_pulldown_tilling_array/L2-intestine_enr_vs_ref.WS200.txt", quote="\"", comment.char="", header = TRUE)
+colnames(spencerL2genes) <- str_c("spencer_L2_", colnames(spencerL2genes))
+spencer_L2_subset <- spencerL2genes %>% select(spencer_L2_ID, spencer_L2_AveExpr, spencer_L2_adj_P_Val, spencer_L2_FC)
+
+spencer_L2_subset %>% head
+```
+
+## Process rlog counts
+
+Subset rlog matrix based on presence in list `2017-11-20_all_changing_genes_0.1alpha_0.8lfc.txt`.  
+
+```{r}
+dynamic_counts_matrix <- matrix_select(dineen_nishimura_counts_matrix, dynamic_regulated_genes$WBGeneID)
+
+dynamic_counts_matrix_scaled <- t(apply(unlist(dynamic_counts_matrix), 1, scale)) 
+
+rownames(dynamic_counts_matrix_scaled) <- rownames(dynamic_counts_matrix)
+colnames(dynamic_counts_matrix_scaled) <- colnames(dynamic_counts_matrix)
+dynamic_counts_matrix_scaled %>% head
+```
+
+This is the plot I had generated.  
+
+```{r}
+myPheatmap(dynamic_counts_matrix_scaled, "test", 6)
+```
+
+This is the plot Erin generated.  
+
+```{r}
+
+Ha <- Heatmap(dynamic_counts_matrix_scaled,
+          col = colorRampPalette(c("cyan","black","yellow"))(1000),    
+          cluster_columns = FALSE,
+          clustering_distance_rows = "spearman",
+          clustering_method_rows = "complete", 
+          show_row_names = FALSE,
+          show_column_names = TRUE,
+          row_names_gp = gpar(cex = 0.2),
+          column_names_gp = gpar(cex = 0.4),
+          heatmap_legend_param = list(color_bar = "continuous"), split = 6)
+Ha
+```
+
+They don't really look the same. Maybe I would try doing these things to figure out how they are different. 
+- Correlation of scaled values between the two methods
+- plot the row means from each analysis against eachother before and after scaling
+- plot the row standard deviation from each analysis per gene
+
+# Add ELT-2 pattern row annotation
+
+In ComplexHeatmap the row order of input matrix and annotation df must be identical to accurately plot data.  
+
+```{r}
+elt2_detected_in_L1 %>% dim
+
+elt2_L1_anno <- data.frame(elt2_detected_in_L1 = ifelse(test = rownames(dynamic_counts_matrix_scaled) %in% elt2_detected_in_L1$WBGeneID, yes = "bound", no = "not.bound")) 
+
+#spot check that order is preserved. bound/TRUE and not.bound/FALSE should appear
+valz = 100
+elt2_L1_anno[valz,1]
+rownames(dynamic_counts_matrix_scaled)[valz] %in% 
+elt2_detected_in_L1$WBGeneID
+
+elt2_L1_anno %>% dim()
+elt2_L1_anno %>% head()
+elt2_L1_anno %>% class()
+```
+
+Incorporate this into a heatmap annotation
+
+```{r}
+Ha + rowAnnotation(foo1 = elt2_L1_anno$elt2_detected_in_L1)
+```
+
+```{r}
+Ha + rowAnnotation(foo1 = elt2_L1_anno$elt2_detected_in_L1) + rowAnnotation(NotChanging = binding_cluster_gene_counts$NotChanging)
+
+colnames(binding_cluster_gene_counts)
+binding_cluster_gene_counts$NotChanging
+binding_cluster_gene_counts
+```
+
