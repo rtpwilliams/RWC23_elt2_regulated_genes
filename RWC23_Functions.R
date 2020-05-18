@@ -83,3 +83,38 @@ mysmallPheatmap <- function(count_matrix, title, rowspace){
            cellheight = 10,
            cutree_rows = rowspace)
 }
+
+# Extract cluster assignments from a ComplexHeatmap object
+
+assign_cluster_from_heatmap <- function(mat,plot){
+  for (i in 1:length(row_order(plot))){
+    if (i == 1){
+      clu <- t(t(row.names(mat[row_order(plot)[[i]],])))
+      out <- cbind(clu, paste("SET", i, sep = ""))
+      colnames(out) <- c("WBGeneID", "Expression.Cluster")
+    }
+    else {
+      clu <- t(t(row.names(mat[row_order(plot)[[i]],])))
+      clu <- cbind(clu, paste("SET", i, sep = ""))
+      out <- rbind(out, clu)
+    }
+  }
+  as.data.frame.matrix(out)
+}
+
+# Use the binomial test to calculate a pvalue from a contingency table
+
+ctable_binom <- function(ctable, alt, p = 0.05){
+  df <- data.frame()
+  x <- 1
+  for (i in rownames(ctable)){
+    xbinom = as.numeric(ctable[i,1]) # number bound in a set
+    nbinom = as.numeric(ctable[i,1] + ctable[i,2]) # total genes in a set
+    pval <- binom.test(xbinom,nbinom,proportion, alternative = alt)$p.value # calculate the pvalue
+    conf95 <- binom.test(xbinom,nbinom,proportion, alternative = alt)$conf.int
+    toappend <- data.frame(Set = i, pval = pval, conf.lower = conf95[1], conf.upper = conf95[2], stringsAsFactors = FALSE)
+    df <- bind_rows(df, toappend)
+    x <- x + 1
+  }
+  print(df %>% mutate(bool = pval < p))
+}
