@@ -84,23 +84,7 @@ mysmallPheatmap <- function(count_matrix, title, rowspace){
            cutree_rows = rowspace)
 }
 
-# Extract cluster assignments from a ComplexHeatmap object
 
-assign_cluster_from_heatmap <- function(mat,plot){
-  for (i in 1:length(row_order(plot))){
-    if (i == 1){
-      clu <- t(t(row.names(mat[row_order(plot)[[i]],])))
-      out <- cbind(clu, paste("SET", i, sep = ""))
-      colnames(out) <- c("WBGeneID", "Expression.Cluster")
-    }
-    else {
-      clu <- t(t(row.names(mat[row_order(plot)[[i]],])))
-      clu <- cbind(clu, paste("SET", i, sep = ""))
-      out <- rbind(out, clu)
-    }
-  }
-  as.data.frame.matrix(out)
-}
 
 # Use the binomial test to calculate a pvalue from a contingency table
 
@@ -118,3 +102,144 @@ ctable_binom <- function(ctable, alt, p = 0.05){
   }
   print(df %>% mutate(bool = pval < p))
 }
+
+# RNA_heatmap() uses ComplexHeatmap to make a heatmap 
+
+RNA_heatmap <- function(mat, split = NULL){
+  Heatmap(
+    mat,
+    name = "elt2D-elt7D\nRNAseq",
+    col = colorRampPalette(c("cyan", "black", "yellow"))(1000),
+    cluster_columns = FALSE,
+    column_split = factor(
+      c(
+        rep("wt", 4),
+        rep("elt7D", 3),
+        rep("elt2D", 4),
+        rep("elt7Delt2D", 3)
+      ),
+      levels = c("wt", "elt7D", "elt2D", "elt7Delt2D")
+    ),
+    split = split,
+    clustering_distance_rows = "spearman",
+    clustering_method_rows = "complete",
+    show_row_names = FALSE,
+    show_column_names = TRUE,
+    row_names_gp = gpar(cex = 0.2),
+    column_names_gp = gpar(cex = 0.4),
+    heatmap_legend_param = list(color_bar = "continuous"),
+    bottom_annotation = HeatmapAnnotation(foo = anno_block(
+      labels = c("wt", "elt7D", "elt2D", "elt7Delt2D"),
+      gp = gpar(border = NA, lty = "blank"),
+    ))
+  )
+}
+
+# elt2_l1_row_annotation() should be used in conjuntion with RNA_heatmap().
+# It will add row annotations to RNA_heatmap for ELT2 binding.
+# The `df` must be the same size and in the same row order as `mat` for RNA_heatmap().
+
+elt2_l1_row_annotation <- function(df){
+  rowAnnotation(L1bound = df$elt2_detected_in_L1,
+                col = list(L1bound = c(
+                  "bound" = "green", "not.bound" = "black"
+                )))
+}
+
+# binding_cluster_row_annotation() will add row annotations based on what binding cluster the gene is assocaited with.
+# The `df` must be the same size and in the same row order as `mat` for RNA_heatmap().
+
+binding_cluster_row_annotation <- function(df){
+  rowAnnotation(
+    Embryo_Specific = df$Embryo_Specific,
+    col = list(Embryo_Specific = c(
+      "absent" = "white", "present" = "#7570B3"
+    )),
+    border = TRUE
+  ) +
+    rowAnnotation(Larval = df$Larval,
+                  col = list(Larval = c(
+                    "absent" = "white", "present" = "#1B9E77"
+                  )),
+                  border = TRUE) +
+    rowAnnotation(
+      Increasing = df$Increasing,
+      col = list(Increasing = c(
+        "absent" = "white", "present" = "#E7298A"
+      )),
+      border = TRUE
+    ) +
+    rowAnnotation(
+      L3_High = df$L3_High,
+      col = list(L3_High = c(
+        "absent" = "white", "present" = "#D95F02"
+      )),
+      border = TRUE
+    ) +
+    rowAnnotation(
+      Not_Changing = df$Not_Changing,
+      col = list(Not_Changing = c(
+        "absent" = "white", "present" = "#505050"
+      )),
+      border = TRUE
+    )
+}
+
+# make_cluster_annotation() logs the number of binding sites per gene (row) that has an ELT2 binding pattern
+
+make_cluster_annotation <- function(input_matrix, binding_matrix){
+  df <- input_matrix %>%
+    as.data.frame.matrix() %>%
+    rownames_to_column() %>%
+    left_join(rownames_to_column(binding_matrix), by = "rowname") %>%
+    select(rowname, all_of(elt2_cluster_names)) %>%
+    replace_na(list(
+      Embryo_Specific = 0,
+      Larval = 0,
+      Increasing = 0,
+      L3_High = 0,
+      Not_Changing = 0
+    ))
+}
+
+# make_cluster_binary_annotation() will convert number of binding sites per ELT2 binding pattern
+# to bindary present/absent list. Used in conjunction with make_cluster_annotation()
+# `input_matrix` is the output of make_cluster_annotation()
+
+make_cluster_binary_annotation <- function(input_matrix){
+  input_matrix %>%
+    mutate(
+      Embryo_Specific = if_else(
+        condition = input_matrix$Embryo_Specific == 0,
+        true = "absent",
+        false = "present"
+      )
+    ) %>%
+    mutate(Larval = if_else(
+      condition = input_matrix$Larval == 0,
+      true = "absent",
+      false = "present"
+    )) %>%
+    mutate(
+      Increasing = if_else(
+        condition = input_matrix$Increasing == 0,
+        true = "absent",
+        false = "present"
+      )
+    ) %>%
+    mutate(
+      L3_High = if_else(
+        condition = input_matrix$L3_High == 0,
+        true = "absent",
+        false = "present"
+      )
+    ) %>%
+    mutate(
+      Not_Changing = if_else(
+        condition = input_matrix$Not_Changing == 0,
+        true = "absent",
+        false = "present"
+      )
+    )}
+
+
