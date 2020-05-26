@@ -42,8 +42,7 @@ library(pheatmap)
 library(RVAideMemoire)
 library(dendextend)
 library(binom)
-library(circlize)
-
+library(tidyselect)
 ```
 
 # To do
@@ -240,7 +239,7 @@ binding_cluster_gene_counts %>% head()
 ```{r}
 spencerLEgenes <-
   read.table(
-    "../TF_Team/02_Data/6_Spencer_et_al_2010_FACS_and_pulldown_tilling_array/LE-intestine_enr_vs_ref.WS200.txt",
+    "./01_input/Spencer_et_al_2010_FACS_and_pulldown_tilling_array/LE-intestine_enr_vs_ref.WS200.txt",
     quote = "\"",
     comment.char = "",
     header = TRUE
@@ -259,7 +258,7 @@ spencer_LE_subset %>% head
 ```{r}
 spencerL2genes <-
   read.table(
-    "../TF_Team/02_Data/6_Spencer_et_al_2010_FACS_and_pulldown_tilling_array/L2-intestine_enr_vs_ref.WS200.txt",
+    "./01_input/Spencer_et_al_2010_FACS_and_pulldown_tilling_array/L2-intestine_enr_vs_ref.WS200.txt",
     quote = "\"",
     comment.char = "",
     header = TRUE
