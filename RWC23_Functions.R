@@ -199,7 +199,8 @@ make_cluster_annotation <- function(input_matrix, binding_matrix){
       Increasing = 0,
       L3_High = 0,
       Not_Changing = 0
-    ))
+    )) %>% 
+    rename(WBGeneID = rowname)
 }
 
 # make_cluster_binary_annotation() will convert number of binding sites per ELT2 binding pattern

@@ -32,7 +32,7 @@ knitr::opts_chunk$set(echo = TRUE, fig_crop = FALSE)
 
 # Load Package Libraries
 
-```{r, message=FALSE}
+```{r}
 library(biomaRt)
 library(tidyverse)
 library(readxl)
@@ -42,12 +42,12 @@ library(pheatmap)
 library(RVAideMemoire)
 library(dendextend)
 library(binom)
-library(tidyselect)
+library(circlize)
 ```
 
 # To do
 
-- cluster set assignments derived from heatmap do not match when plotted back to the heatmap
+- Finish adding dialog
 
 # Background and Rationale
 
@@ -110,6 +110,8 @@ They were collected as part of the modENCODE consortium and were processed by Da
 
 2) Kudron, M. M., Victorsen, A., Gevirtzman, L., Hillier, L. W., Fisher, W. W., Vafeados, D., … Waterston, R. H. (2018). The modern resource: genome-wide binding profiles for hundreds of Drosophila and Caenorhabditis elegans transcription factors. Genetics, 208(3), 937–949. https://doi.org/10.1534/genetics.117.300657
 
+3) Spencer, W. C., Zeller, G., Watson, J. D., Henz, S. R., Watkins, K. L., McWhirter, R. D., Petersen, S., Sreedharan, V. T., Widmer, C., Jo, J., Reinke, V., Petrella, L., Strome, S., Von Stetina, S. E., Katz, M., Shaham, S., Rätsch, G., & Miller, D. M. (2011). A spatial and temporal map of C. elegans gene expression. Genome Research, 21(2), 325–341. https://doi.org/10.1101/gr.114595.110
+
 # Code
 
 ## Source functions
@@ -147,6 +149,7 @@ colnames(dynamic_regulated_genes) <- "WBGeneID"
 dynamic_regulated_genes %>% head
 ```
 
+Load differential expression clusters from Dineen and Nishimura et al (2018).  
 
 ```{r}
 dineen_nishimura_clusters <-
@@ -236,6 +239,8 @@ binding_cluster_gene_counts %>% head()
 
 ## Load Spencer et. al. intestine expression
 
+This data is from a 2011 paper using FACS sorting of Late Embryo (LE) and Larval Stage 2 (L2) intestine cells, measured with microarray. See [Spencer et. al, (2011)](https://pubmed.ncbi.nlm.nih.gov/21177967/).  
+
 ```{r}
 spencerLEgenes <-
   read.table(
@@ -319,6 +324,7 @@ Heatmap(
 )
 ```
 
+Add expression set and column labels.  
 
 ```{r}
 RNA_column_order <-
@@ -330,7 +336,19 @@ RNA_column_order <-
   ),
   levels = c("WT", "elt7D", "elt2D", "elt7Delt2D"))
 RNA_column_order
+```
 
+
+```{r}
+column_labels <- structure(c("rep1", "rep2", "rep3", "rep4", "rep1", "rep2", "rep3", "rep1", "rep2", "rep3", "rep4", "rep1", "rep2", "rep3"),
+                           names = colnames(dynamic_counts_matrix_scaled_ascend)
+)
+
+column_labels
+```
+
+
+```{r}
 Ha <- Heatmap(
   dynamic_counts_matrix_scaled_ascend,
   name = "elt2D-elt7D\nRNAseq",
@@ -340,21 +358,34 @@ Ha <- Heatmap(
   clustering_method_rows = "complete",
   show_row_names = FALSE,
   show_column_names = TRUE,
-  row_names_gp = gpar(cex = 0.2),
-  column_names_gp = gpar(cex = 0.4),
+  column_labels = column_labels[colnames(dynamic_counts_matrix_scaled_ascend)],
+  column_names_gp = gpar(cex = 0.7),
   heatmap_legend_param = list(color_bar = "continuous"),
   row_split = dineen_nishimura_sets_ascend$set,
+  row_title = NULL,
+  column_title = NULL,
   column_split = RNA_column_order,
-  bottom_annotation = HeatmapAnnotation(foo = anno_block(
-    labels = c("wt", "elt7D", "elt2D", "elt7Delt2D"),
-    gp = gpar(border = NA, lty = "blank")
-  )),
+  bottom_annotation = HeatmapAnnotation(
+    foo = anno_block(
+      labels = c("WT", "elt7D", "elt2D", "elt7D;elt2D"),
+      labels_gp = gpar(cex = .8),
+      gp = gpar(border = NA, lty = "blank")
+      ),
+    foo2 = anno_block(gp = gpar(fill = "black"), height = unit(0.5, "mm"))
+  ),
   left_annotation = rowAnnotation(foo = anno_block(
     labels = c("SET1", "SET2", "SET3", "SET4", "SET5", "SET6"),
     labels_rot = 0,
-    gp = gpar(border = NA, lty = "blank")
+    gp = gpar(border = NA, lty = "blank", cex = 0.4)
   ))
 )
+Ha
+```
+
+
+Sanity check to ensure that cluster splitting is occuring correctly. Remap the Set assignments back to the heatmap as a row annotation.
+
+```{r}
 Ha + rowAnnotation(set = dineen_nishimura_sets_ascend$set)
 ```
 
@@ -363,6 +394,8 @@ Ha + rowAnnotation(set = dineen_nishimura_sets_ascend$set)
 
 
 ## Add ELT-2 pattern row annotation
+
+This section will add annotation to the rows of the elt2/elt7 differentiall expression heatmap with ELT-2 ChIP-seq binding during the L1 stage. This will determine what differential expression sets associate with ELT-2 binding during the L1 stage. The reason L1 stage ChIP-seq eaks are being used is because the elt2/elt7 RNA-seq experiment was conducted in the L1 stage.  
 
 In ComplexHeatmap the row order of input matrix and annotation df must be identical to accurately plot data.  
 
@@ -394,23 +427,42 @@ Ha_L1chip <-
 
 Ha_L1chip
 
-# pdf("./03_plots/200428_wt_elt2singledouble_L1elt2bound_heatmap.pdf", height = 5, width = 5)
+# pdf("./03_plots/200527_elt2elt7DERNAseq_L1elt2bound_heatmap.pdf", height = 5, width = 5)
 # Ha_L1chip
 # dev.off()
 ```
 
-Determine enrichment of ELT-2 binding during L1 stage.  
+Visually it appears that some elt2/elt7 differential expression clusters have more or less ELT-2 binding associated with the sets. I would like to be more quantitative with this assesment.  
+
+Determine enrichment of ELT-2 binding during L1 stage. I will calculate the percentage of genes with an ELT-2 ChIP-seq peak detected during the L1 stage.  
+
+First use `merge` to combine the ELT-2 binding status and expression set for each gene.  
 
 ```{r}
 expression_L1_binding <-
   merge(elt2_L1_anno, dineen_nishimura_sets_ascend, by = "WBGeneID")
 expression_L1_binding %>% head
+```
+
+Next use `table` to tally the number of bound and not.bound genes per expression set.  
+
+```{r}
 clust_L1bound_counts <-
   table(expression_L1_binding$set,
         expression_L1_binding$elt2_detected_in_L1)
+clust_L1bound_counts
+```
 
+Use `prop.table` to convert these values to percentages within each set.  
+
+```{r}
 clust_L1bound_prop <- prop.table(clust_L1bound_counts, 1)
+clust_L1bound_prop
+```
 
+Adjust the percentages object into a dataframe that `ggplot2` can use.  
+
+```{r}
 clust_L1bound_prop_ggplot <- as.data.frame(clust_L1bound_prop)
 
 colnames(clust_L1bound_prop_ggplot) <- c("SET", "Status", "Freq")
@@ -453,7 +505,9 @@ l1bound_percents
 # ggsave("./03_plots/200428_proportion_of_l1elt2_per_expression_cluster.pdf", height = 2, width = 5)
 ```
 
-Plot the number of "bound" vs "not.bound" per cluster
+This plot shows that all of the differential expression sets have less than 50% of genes bound by ELT-2.  
+
+Rather than viewing percentages of genes bound, what is the number of "bound" vs "not.bound" per cluster?  
 
 ```{r}
 clust_L1bound_counts_ggplot <- as.data.frame(clust_L1bound_counts)
@@ -501,8 +555,6 @@ This says that all sets but SET5 have a significant difference in genes bound co
 
 Now use the `less` or `greater` argument of `binom.test` to see if there is more or less binding.  
 
-First two `less`
-
 ```{r}
 ctable_binom(ctable = clust_L1bound_counts, alt = "less")
 ```
@@ -515,7 +567,9 @@ Now try `greater`.
 ctable_binom(clust_L1bound_counts, "greater")
 ```
 
-Draw line on percentage plots to indicate background percentage of L1 binding.  
+This says that SET3, SET4 and SET6 have a higher percentage of genes bound compared the the "background" percent of bound genes for the entire dataset.  
+
+Make a plot that visually depicts this. Draw line on the percentage plot to indicate background percentage of L1 stage ELT-2 binding.  
 
 ```{r}
 l1bound_percents +
@@ -530,7 +584,7 @@ l1bound_percents +
   coord_flip()
 
 # ggsave(
-#   "./03_plots/200504_percentage_l1bound_per_expression_cluster.pdf",
+#   "./03_plots/200527_percentage_l1bound_per_expression_cluster.pdf",
 #   width = 4,
 #   height = 5
 # )
@@ -549,7 +603,9 @@ dhyper(x3, m, N, k)
 
 ```
 
-Compute pairwise fisher's exact tests
+A very small p-value for the hypergeometric test suggests that the entire dataset is enriched for ELT-2.  
+
+The next section with compute pairwise fisher's exact tests for the different sets. I have a difficult time interpreting these results.  
 
 ```{r}
 fisher.multcomp(clust_L1bound_counts, p.method = "bonferroni")
@@ -562,19 +618,27 @@ fisher.multcomp(clust_L1bound_counts, p.method = "bonferroni")$p.value < 0.05
 
 ## Row annotation of ELT-2 Binding Pattern Clusters
 
+This section will add annotation to the rows of the elt2/elt7 differentiall expression heatmap with ELT-2 ChIP-seq binding pattern clusters. This will determine what differential expression sets associate with ELT-2 binding patters.  
+
+Start by using custom function `make_cluster_annotation()`. This function takes two objects: the matrix of gene expression values and a dataframe of counts ELT-2 binding patterns per genes. It returns a dataframe with the number of ELT-2 binding categories associated with each gene.  
 
 ```{r}
-dynamic_counts_matrix_scaled %>% dim
-
 chip_annotation <-
   make_cluster_annotation(dynamic_counts_matrix_scaled_ascend,
                           binding_cluster_gene_counts)
 
-unique(rownames(dynamic_counts_matrix_scaled_ascend) == chip_annotation$rowname)
+chip_annotation %>% head()
+```
+
+Sanity check to ensure that the order and number of rows is preserved.  
+
+```{r}
+unique(rownames(dynamic_counts_matrix_scaled_ascend) == chip_annotation$WBGeneID)
 
 nrow(dynamic_counts_matrix_scaled) == nrow(chip_annotation)
 ```
 
+Build add row annotation for the number of ELT-2 binding clusters associated with each gene.  
 
 ```{r}
 Ha_L1chip_bindcluster <- Ha_L1chip +
@@ -811,7 +875,7 @@ bound_only_elt2_clust_anno %>% head()
 Assign k-means clusters for rows before plotting
 
 ```{r}
-kclus <- kmeans(dynamic_counts_matrix_scaled_bound_only, 5)
+kclus <- kmeans(dynamic_counts_matrix_scaled_bound_only, 4)
 bound_only_sets <-
   data.frame(
     WBGeneID = rownames(dynamic_counts_matrix_scaled_bound_only),
@@ -825,16 +889,14 @@ Draw heatmap and check that set assignment is correct.
 ```{r}
 Ha_bound_only <-
   RNA_heatmap(dynamic_counts_matrix_scaled_bound_only,
-              bound_only_sets$set) +
-  rowAnnotation(sets = bound_only_sets$set)
+              bound_only_sets$set)
 
 Ha_bound_only
 ```
 
 ```{r}
-Ha_bound_only <-
-  RNA_heatmap(dynamic_counts_matrix_scaled_bound_only,
-              bound_only_sets$set)
+Ha_bound_only +
+  rowAnnotation(sets = bound_only_sets$set)
 
 ```
 
@@ -843,10 +905,10 @@ Ha_bound_only <-
 bound_only_annotation <-
   merge(bound_only_elt2_clust_anno,
         bound_only_sets,
-        by.x = "rowname",
+        by.x = "WBGeneID",
         by.y = "WBGeneID")
 bound_only_annotation_ascend <-
-  bound_only_annotation %>% arrange(rowname)
+  bound_only_annotation %>% arrange(WBGeneID)
 head(bound_only_annotation_ascend)
 ```
 
@@ -854,6 +916,30 @@ head(bound_only_annotation_ascend)
 Ha_bound_only_chipClust <-
   Ha_bound_only + binding_cluster_row_annotation(bound_only_elt2_clust_anno)
 Ha_bound_only_chipClust
+```
+
+# Fish out the genes that change the most
+
+```{r}
+variance_per_gene <-  as.data.frame(matrix_select(dynamic_counts_matrix, l1_bound_list$WBGeneID)) %>% rownames_to_column(var = "WBGeneID") %>% 
+    merge(bound_only_sets, by = "WBGeneID") %>% 
+    pivot_longer(wt_sorted_1:elt2Delt7D_sorted_3, names_to = "sample", values_to = "rlogCount") %>%
+    group_by(WBGeneID, set) %>%
+    summarise(variance = var(rlogCount))
+
+variance_per_gene %>% filter(set == "SET1") %>% arrange(desc(variance))
+```
+
+```{r}
+variance_per_gene %>% filter(set == "SET2") %>% arrange(desc(variance))
+```
+
+```{r}
+variance_per_gene %>% filter(set == "SET3") %>% arrange(desc(variance))
+```
+
+```{r}
+variance_per_gene %>% filter(set == "SET4") %>% arrange(desc(variance))
 ```
 
 
@@ -916,6 +1002,7 @@ Ha_bound_only + rowAnnotation(L1_Gut_LFC = bound_only_L1_gut_lfc$log2FoldChange,
                               col = list(L1_Gut_LFC = col_fun))
 ```
 
+Next: better display of `L1_Gut_LFC`. Perform GO for the different clusters in this plot. Compare motifs of peaks assigned to genes within each cluster (or activated sets 1 and 2 and repressed sets 3 4 and 5).   
 
 # Make a TF subset heatmap
 
@@ -1044,6 +1131,9 @@ Additionally, TFs that are expressed in the L1 intestine are upregulated in abse
 Futhermore, TFs that are not expressed in the L1 intestine are upregulated only in the absence of both ELT-2 and ELT-7.  
 
 TFs to follow up: pqm-1, zip-10, odd-1 (repressed by elt-2 alone, normally gut expressed). nhr-58 (vulva), zip-2 (neuron), cebp-1 (neuron), gla-3 (germline), zip-11
+
+
+
 
 # old code below
 
