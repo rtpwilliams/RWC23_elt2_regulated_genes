@@ -1,3 +1,18 @@
+myLibs <- function(){
+  library(biomaRt)
+  library(tidyverse)
+  library(readxl)
+  library(ComplexHeatmap)
+  library(matrixStats)
+  library(pheatmap)
+  library(RVAideMemoire)
+  library(dendextend)
+  library(binom)
+  library(circlize)
+}
+
+
+
 # matrix_select() subsets a matrix based on vactor of gene names.
 # Pleasure ensure gene naming is consistent between files.
 # It is best to use WBGeneIDs for this process
@@ -134,6 +149,43 @@ RNA_heatmap <- function(mat, split = NULL){
     ))
   )
 }
+
+# RNA_heatmap2() is a variation with better plotting aestetics
+
+RNA_heatmap2 <- function(mat, column_split = NULL, row_title = NULL, row_split = NULL, split = NULL){
+  Heatmap(
+    mat,
+    name = "elt2D-elt7D\nRNAseq",
+    col = colorRampPalette(c("cyan", "black", "yellow"))(1000),
+    cluster_columns = FALSE,
+    clustering_distance_rows = "spearman",
+    clustering_method_rows = "complete",
+    show_row_names = FALSE,
+    show_column_names = TRUE,
+    column_labels = column_labels[colnames(mat)],
+    column_names_gp = gpar(cex = 0.7),
+    heatmap_legend_param = list(color_bar = "continuous"),
+    row_split = row_split,
+    row_title = row_title,
+    column_title = NULL,
+    column_split = column_split,
+    bottom_annotation = HeatmapAnnotation(
+      foo = anno_block(
+        labels = c("WT", "elt7D", "elt2D", "elt7D;elt2D"),
+        labels_gp = gpar(cex = .8),
+        gp = gpar(border = NA, lty = "blank")
+      ),
+      foo2 = anno_block(gp = gpar(fill = "black"), height = unit(0.5, "mm"))
+    ),
+    # left_annotation = rowAnnotation(foo = anno_block(
+    #   labels = c("SET1", "SET2", "SET3", "SET4", "SET5", "SET6"),
+    #   labels_rot = 0,
+    #   gp = gpar(border = NA, lty = "blank", cex = 0.4)
+    # ))
+  )
+}
+IAMHERE FIX RNAheatmap()
+
 
 # elt2_l1_row_annotation() should be used in conjuntion with RNA_heatmap().
 # It will add row annotations to RNA_heatmap for ELT2 binding.

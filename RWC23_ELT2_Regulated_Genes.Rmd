@@ -48,6 +48,7 @@ library(circlize)
 # To do
 
 - Finish adding dialog
+- Add spencer LE and L2 intestine expression data to dineen heatmap
 
 # Background and Rationale
 
@@ -75,7 +76,7 @@ For clusters of transcription factors (TFs) differentially expressed during elt-
   + for all
   + for only ELT-2 bound
 
-# Data
+# Description of Data
 
 I will integrate two RNA-seq experiments and a ChIP-seq experiments.
 
@@ -104,6 +105,7 @@ They were collected as part of the modENCODE consortium and were processed by Da
 - Embryonic
 - Increasing
 
+
 # Citations
 
 1) Dineen, A., Osborne Nishimura, E., Goszczynski, B., Rothman, J. H., & McGhee, J. D. (2018). Quantitating transcription factor redundancy: The relative roles of the ELT-2 and ELT-7 GATA factors in the C. elegans endoderm. Developmental Biology, 435(2), 150–161. https://doi.org/10.1016/J.YDBIO.2017.12.023
@@ -111,6 +113,8 @@ They were collected as part of the modENCODE consortium and were processed by Da
 2) Kudron, M. M., Victorsen, A., Gevirtzman, L., Hillier, L. W., Fisher, W. W., Vafeados, D., … Waterston, R. H. (2018). The modern resource: genome-wide binding profiles for hundreds of Drosophila and Caenorhabditis elegans transcription factors. Genetics, 208(3), 937–949. https://doi.org/10.1534/genetics.117.300657
 
 3) Spencer, W. C., Zeller, G., Watson, J. D., Henz, S. R., Watkins, K. L., McWhirter, R. D., Petersen, S., Sreedharan, V. T., Widmer, C., Jo, J., Reinke, V., Petrella, L., Strome, S., Von Stetina, S. E., Katz, M., Shaham, S., Rätsch, G., & Miller, D. M. (2011). A spatial and temporal map of C. elegans gene expression. Genome Research, 21(2), 325–341. https://doi.org/10.1101/gr.114595.110
+
+4) Boeck, M. E., Huynh, C., Gevirtzman, L., Thompson, O. A., Wang, G., Kasper, D. M., Reinke, V., Hillier, L. W., & Waterston, R. H. (2016). The time-resolved transcriptome of C. elegans. Genome Research, 26(10), 1441–1450. https://doi.org/10.1101/gr.202663.115
 
 # Code
 
@@ -170,6 +174,8 @@ dineen_nishimura_sets_ascend %>% head
 ```{r}
 elt2_peaks <-
   read_xlsx("./01_input/200410_peaksForBigBed.xlsx", sheet = "full cluster assignment")
+
+# elt2_peaks <- readRDS("./01_input/annotatedPeaks.rds")
 
 colnames(elt2_peaks) <-
   c(
@@ -303,7 +309,7 @@ dynamic_counts_matrix_scaled_ascend <-
 
 Must use arrange to sort genes in descending order to ensure row order is preserved
 
-Recreate Supplementary Figure S4a from Dineen and Nishimura et al.    
+# Recreate Supplementary Figure S4a from Dineen and Nishimura et al.    
 
 Use expression clusters from Dineen and Nishimura et al to split the clusters.  
 
@@ -393,7 +399,7 @@ Ha + rowAnnotation(set = dineen_nishimura_sets_ascend$set)
 
 
 
-## Add ELT-2 pattern row annotation
+## Add L1 stage ELT-2 binding
 
 This section will add annotation to the rows of the elt2/elt7 differentiall expression heatmap with ELT-2 ChIP-seq binding during the L1 stage. This will determine what differential expression sets associate with ELT-2 binding during the L1 stage. The reason L1 stage ChIP-seq eaks are being used is because the elt2/elt7 RNA-seq experiment was conducted in the L1 stage.  
 
@@ -427,9 +433,9 @@ Ha_L1chip <-
 
 Ha_L1chip
 
-# pdf("./03_plots/200527_elt2elt7DERNAseq_L1elt2bound_heatmap.pdf", height = 5, width = 5)
-# Ha_L1chip
-# dev.off()
+pdf("./03_plots/figure_1/200615_Figure1A_elt2elt7DERNAseq_L1elt2bound_heatmap.pdf", height = 4, width = 4.5)
+Ha_L1chip
+dev.off()
 ```
 
 Visually it appears that some elt2/elt7 differential expression clusters have more or less ELT-2 binding associated with the sets. I would like to be more quantitative with this assesment.  
@@ -581,10 +587,11 @@ l1bound_percents +
     ymin = l1bound_binom$conf.lower,
     width = 0.25
   ) +
-  coord_flip()
+  coord_flip() +
+  ggtitle("L1 stage ELT-2 binding per\nexperession set")
 
 # ggsave(
-#   "./03_plots/200527_percentage_l1bound_per_expression_cluster.pdf",
+#   "./03_plots/figure_1/200615_Figure1B_percentage_l1bound_per_expression_cluster.pdf",
 #   width = 4,
 #   height = 5
 # )
@@ -673,14 +680,14 @@ chip_annotation_present_absent <-
 
 Plot the heatmap with presence/absence.
 
+
 ```{r}
 Ha_L1chip_clusterchip <-
   Ha_L1chip + binding_cluster_row_annotation(chip_annotation_present_absent)
 
 Ha_L1chip_clusterchip
 
-
-# pdf("./03_plots/200504_wt_elt2singledouble_L1elt2bound_elt2bindclusters_heatmap.pdf", height = 5, width = 5)
+# pdf("./03_plots/figure_1/200615_Figure1A_wt_RNA_L1elt2bound_elt2bindclusters_heatmap.pdf", height = 4.5, width = 4)
 # Ha_L1chip_clusterchip
 # dev.off()
 ```
@@ -735,6 +742,8 @@ ggplot(expressionSet_per_BindingCluster,
   geom_bar(stat = "identity", position = "fill") +
   theme_classic() +
   scale_fill_manual(values = as.vector(cluster_colors$val))
+
+# ggsave("./03_plots/figure_1/200615_FigureS1A_Cluster_percent_present_per_Set.pdf")
 ```
 
 # What is the percentage of genes within each Expression Set that are associated with an ELT-2 binding cluster?
@@ -744,16 +753,13 @@ ggplot(expressionSet_per_BindingCluster,
        aes(x = ELT2_cluster, y = present, fill = set)) +
   geom_bar(stat = "identity", position = "fill") +
   theme_classic()
+
+# ggsave("./03_plots/figure_1/200615_FigureS1B_Set_percent_present_per_Cluster.pdf")
 ```
 
 Make a series of horizontal barplots with percentage of ELT-2 binding cluster per expression cluster.  
 
 TODO: Make a function that does all that is below.  
-```{r}
-setStats <- function(){
-  
-}
-```
 
 
 First, calculate the percentage of each ELT-2 binding category against the total dataset.  
@@ -838,16 +844,19 @@ ggplot(expression_binding_stats,
   facet_grid(. ~ ELT2_cluster) +
   scale_fill_manual(values = as.character(cluster_colors$val))
 
-# ggsave(filename = "./03_plots/200511_Percent_of_ELT2bindClust_per_ExpressionClust.pdf")
+# ggsave(filename = "./03_plots/figure_1/200615_Figure1C_Percent_of_ELT2bindClust_per_ExpressionClust.pdf",
+#        height = 5,
+#        width = 7)
 ```
 
 # Subset ELT-2/ELT-7 differentially expressed genes based on ELT-2 binding in L1 stage
 
-
+IAMHERE: FIX RNA_heatmap Function to look pretty like the `Ha` plot
 
 ```{r}
-RNA_heatmap(dynamic_counts_matrix_scaled_ascend,
-            split = elt2_L1_anno$elt2_detected_in_L1) +
+RNA_heatmap2(dynamic_counts_matrix_scaled_ascend,
+            column_split = RNA_column_order,
+            row_split = elt2_L1_anno$elt2_detected_in_L1) +
   elt2_l1_row_annotation(elt2_L1_anno) +
   binding_cluster_row_annotation(chip_annotation_present_absent)
 ```
@@ -888,8 +897,10 @@ Draw heatmap and check that set assignment is correct.
 
 ```{r}
 Ha_bound_only <-
-  RNA_heatmap(dynamic_counts_matrix_scaled_bound_only,
-              bound_only_sets$set)
+  RNA_heatmap2(mat = dynamic_counts_matrix_scaled_bound_only,
+              column_split = RNA_column_order,
+              row_split = bound_only_sets$set,
+              row_title = c("SET2", "SET3", "SET1", "SET4"))
 
 Ha_bound_only
 ```
@@ -918,7 +929,43 @@ Ha_bound_only_chipClust <-
 Ha_bound_only_chipClust
 ```
 
-# Fish out the genes that change the most
+# Fish out the genes that change the most and look for CGC stains
+
+```{r}
+cgc_strains <- readLines("./01_input/200608_cgc-strains.txt")
+
+cgc_strains <- str_trim(cgc_strains)
+head(cgc_strains, n = 40)
+
+total_strains <- sum(str_count(cgc_strains, pattern = "-----------------------------------------------------------------------------"))
+
+cgc_strains_df <- data.frame(
+  strain = cgc_strains[str_which(cgc_strains, "Strain:")],
+  species = cgc_strains[str_which(cgc_strains, "Species:")],
+  genotype = cgc_strains[str_which(cgc_strains, "Genotype:")],
+  description = cgc_strains[str_which(cgc_strains, "Description:")],
+  mutagen = cgc_strains[str_which(cgc_strains, "Mutagen:")],
+  outcrossed = cgc_strains[str_which(cgc_strains, "Outcrossed:")],
+  made.by = cgc_strains[str_which(cgc_strains, "Made by:")],
+  received = cgc_strains[str_which(cgc_strains, "Received:")],
+  stringsAsFactors = FALSE,
+  
+)
+
+counter = 1
+cgc_strains_df <- data.frame(stringsAsFactors = FALSE)
+for (i in 1:(total_strains)){
+  to_append <- data.frame(string = str_c(c(cgc_strains[(counter+1):(counter+8)]), collapse = "\t"), stringsAsFactors = FALSE)
+  cgc_strains_df <- bind_rows(cgc_strains_df, to_append)
+  counter <- counter + 9
+}
+
+# cgc_strains_list <- str_split(cgc_strains_df$string, pattern = "\t")
+# 
+# str(cgc_strains_list)
+# cgc_strains_df$string[str_detect(cgc_strains_df$string, pattern = "elt-2")]
+```
+
 
 ```{r}
 variance_per_gene <-  as.data.frame(matrix_select(dynamic_counts_matrix, l1_bound_list$WBGeneID)) %>% rownames_to_column(var = "WBGeneID") %>% 
@@ -927,21 +974,57 @@ variance_per_gene <-  as.data.frame(matrix_select(dynamic_counts_matrix, l1_boun
     group_by(WBGeneID, set) %>%
     summarise(variance = var(rlogCount))
 
+variance_per_gene <- getBM(
+  mart = paramart,
+  filter = c("wbps_gene_id"),
+  value = variance_per_gene$WBGeneID,
+  attributes = c('wbps_gene_id', 'external_gene_id')
+) %>% inner_join(variance_per_gene, by = c("wbps_gene_id" = "WBGeneID"))
+
+variance_per_gene %>% mutate(cgc_count = 
+                               sum(str_count(cgc_strains_df$string, pattern = "elt-2"))
+                             ) %>% arrange(desc(cgc_count))
+
+cgc_count_column <- c()
+for (i in variance_per_gene$external_gene_id){
+  cgc_count_column <- append(cgc_count_column, sum(str_count(cgc_strains_df$string, pattern = paste(i, "(?![:digit:])", sep = "")
+                                                             )))
+}
+
+variance_per_gene <- variance_per_gene %>% mutate(cgc_count = cgc_count_column)
+```
+
+SET1 genes are up in wildtype but down in elt-2 (-) and do not change with elt-7 (-) single or double. In other words, activated alone by ELT-2
+
+```{r}
 variance_per_gene %>% filter(set == "SET1") %>% arrange(desc(variance))
 ```
 
+SET1 strains to order: strain CL2122 (mtl-2)
+
+SET2 genes go up only in elt-2 (-)
+
 ```{r}
-variance_per_gene %>% filter(set == "SET2") %>% arrange(desc(variance))
+variance_per_gene %>% filter(set == "SET2") %>% arrange(desc(variance)) %>% filter(cgc_count > 1)
 ```
+
+SET2 genes to order: OP201 (pqm-1)
+
+SET3 genes go up in elt-2 (-) and go up a little higher in elt-2 (-);elt-7 (-)
 
 ```{r}
 variance_per_gene %>% filter(set == "SET3") %>% arrange(desc(variance))
 ```
 
+SET3 order: OP750 (gla-3)
+
+SET4 genes only go down in elt-2 (-);elt-7 (-)
+
 ```{r}
 variance_per_gene %>% filter(set == "SET4") %>% arrange(desc(variance))
 ```
 
+SET4 cgc strain: OP509 (ets-4)
 
 # L1 Intestine expression row annotation
 
@@ -1002,7 +1085,20 @@ Ha_bound_only + rowAnnotation(L1_Gut_LFC = bound_only_L1_gut_lfc$log2FoldChange,
                               col = list(L1_Gut_LFC = col_fun))
 ```
 
-Next: better display of `L1_Gut_LFC`. Perform GO for the different clusters in this plot. Compare motifs of peaks assigned to genes within each cluster (or activated sets 1 and 2 and repressed sets 3 4 and 5).   
+Next: better display of `L1_Gut_LFC`. Perform GO for the different clusters in this plot. Compare motifs of peaks assigned to genes within each cluster (or activated sets 1 and 2 and repressed sets 3 4 and 5). 
+
+Make an MA plot for each set
+
+```{r}
+ggplot(
+  RWC24_res %>% rownames_to_column(var = "WBGeneID") %>% inner_join(bound_only_sets, by = "WBGeneID"),
+  aes(x = baseMean, y = log2FoldChange, color = pvalue < 0.01)
+) +
+  geom_point() +
+  scale_x_log10() +
+  facet_wrap(~ set)
+```
+
 
 # Make a TF subset heatmap
 
@@ -1107,7 +1203,7 @@ bound_tf_lfc <-
 
 head(bound_tf_lfc)
 
-Heatmap(
+HAboundTF <- Heatmap(
   dynamic_counts_matrix_scaled_TFs_bound_names,
   col = colorRampPalette(c("cyan", "black", "yellow"))(1000),
   cluster_columns = FALSE,
@@ -1116,12 +1212,9 @@ Heatmap(
   show_row_names = TRUE,
   row_names_side = "left",
   show_column_names = TRUE,
-  column_title = "Differential Expression of ELT-2 bound Transcription Factors"
-) +
-  rowAnnotation(lfc = bound_tf_lfc$log2FoldChange,
-                col = list(lfc = colorRamp2(c(-10, 0, 10), c(
-                  "blue", "white", "red"
-                ))))
+  column_title = "Differential Expression of\nELT-2 bound Transcription Factors"
+)
+
 ```
 
 This plot suggests that transcription factors bound by ELT-2 are typically upregulated in the absence of ELT-2. 
@@ -1131,6 +1224,16 @@ Additionally, TFs that are expressed in the L1 intestine are upregulated in abse
 Futhermore, TFs that are not expressed in the L1 intestine are upregulated only in the absence of both ELT-2 and ELT-7.  
 
 TFs to follow up: pqm-1, zip-10, odd-1 (repressed by elt-2 alone, normally gut expressed). nhr-58 (vulva), zip-2 (neuron), cebp-1 (neuron), gla-3 (germline), zip-11
+
+
+
+# Conclusions
+
+Figure 1A
+
+```{r}
+
+```
 
 
 
