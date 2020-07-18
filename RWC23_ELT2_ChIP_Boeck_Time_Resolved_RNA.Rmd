@@ -20,6 +20,8 @@ Pseudocode:
 - Filter for ELT-2 ChIP bound genes, make heatmap
 - Filter for intestine expressed genes (spencer data), make heatmap, add row annotation for binding cluster
 
+# Import Time-resolved RNA
+
 ```{r}
 time_resolved_rna <- read_delim(file = "./02_Data/9_Boeck_et_al_2016_time-resolved_transcriptome/wormbase_genes.readcounts_dcpm_per_sample.txt", delim = " ", quote = )
 
@@ -36,14 +38,34 @@ time_resolved_rna <- getBM(
 
 ```
 
+## Select relevant columns
 
-IAMHERE: Start with All Genes List
+Subset the `time_resolved_rna` dataset for `dcpm` columns
+
+```{r}
+time_resolved_rna %>% select(
+  wbps_gene_id,
+  matches(".*EE.*dcpm"),
+  matches(".*EMB.*dcpm"),
+  matches(".*L1.*dcpm"),
+  matches(".*L2.*dcpm"),
+  matches(".*L3.*dcpm"),
+  L4_dcpm,
+  L4b_dcpm,
+  matches(".*YA.*dcpm"),
+  -aggregate_polya_dcpm
+)
+
+time_resolved_rna %>% select(
+  matches(".*l1.*dcpm")
+)
+```
+
+```{r}
+colnames(time_resolved_rna)
+```
 
 
-
-
-# A gene-centered C. elegans protein-DNA interaction network provides a framework for functional predictions.
-## Fuxman Bass JI, Pons C, Kozlowski L, et al. Mol Syst Biol. 2016;12(10):884. doi:10.15252/MSB.20167131
 
 ```{r}
 # initialize blank dataframe
@@ -552,6 +574,8 @@ intestine_gene_list <- intestine_rna %>% filter(
 ) %>% select(WBGeneID)
 ```
 
+# Filter time-resolved RNA-seq based on intestine expression
+
 ```{r}
 time_resolved_rna_matrix_intestine_counts <- time_resolved_rna %>%
   select(
@@ -578,11 +602,6 @@ time_resolved_rna_matrix_intestine_counts <- time_resolved_rna %>%
 
 ```
 
-```{r}
-Heatmap(time_resolved_rna_matrix_intestine_counts,
-        cluster_columns = FALSE,
-        show_row_names = FALSE)
-```
 
 ```{r}
 time_resolved_rna_matrix_intestine_counts_scaled <- t(apply(unlist(time_resolved_rna_matrix_intestine_counts), 1, scale))
@@ -661,7 +680,7 @@ head(time_resolved_rna_chip_annotation)
 
 ```{r}
 Heatmap(
-  matrix_select(time_resolved_rna_matrix_intestine_filtered, 
+  matrix_select(time_resolved_rna_matrix_intestine_dcpm_scaled, 
                 filter(time_resolved_rna_chip_annotation, Embryo_Specific == "present")$WBGeneID),
   cluster_columns = FALSE
 )
@@ -669,7 +688,7 @@ Heatmap(
 
 ```{r}
 Heatmap(
-  matrix_select(time_resolved_rna_matrix_intestine_filtered, 
+  matrix_select(time_resolved_rna_matrix_intestine_dcpm_scaled, 
                 filter(time_resolved_rna_chip_annotation, Larval == "present")$WBGeneID),
   cluster_columns = FALSE
 )
@@ -678,7 +697,7 @@ Heatmap(
 
 ```{r}
 Heatmap(
-  matrix_select(time_resolved_rna_matrix_intestine_filtered, 
+  matrix_select(time_resolved_rna_matrix_intestine_dcpm_scaled, 
                 filter(time_resolved_rna_chip_annotation, Increasing == "present")$WBGeneID),
   cluster_columns = FALSE
 )
@@ -686,7 +705,7 @@ Heatmap(
 
 ```{r}
 Heatmap(
-  matrix_select(time_resolved_rna_matrix_intestine_filtered, 
+  matrix_select(time_resolved_rna_matrix_intestine_dcpm_scaled, 
                 filter(time_resolved_rna_chip_annotation, L3_High == "present")$WBGeneID),
   cluster_columns = FALSE
 )
@@ -694,7 +713,7 @@ Heatmap(
 
 ```{r}
 Heatmap(
-  matrix_select(time_resolved_rna_matrix_intestine_filtered, 
+  matrix_select(time_resolved_rna_matrix_intestine_dcpm_scaled, 
                 filter(time_resolved_rna_chip_annotation, Not_Changing == "present")$WBGeneID),
   cluster_columns = FALSE
 )
