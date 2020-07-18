@@ -23,7 +23,7 @@ Pseudocode:
 # Import Time-resolved RNA
 
 ```{r}
-time_resolved_rna <- read_delim(file = "./02_Data/9_Boeck_et_al_2016_time-resolved_transcriptome/wormbase_genes.readcounts_dcpm_per_sample.txt", delim = " ", quote = )
+time_resolved_rna <- read.delim("~/Dropbox/01_GITHUBREPO/RWC23_elt2_regulated_genes/02_Data/9_Boeck_et_al_2016_time-resolved_transcriptome/Unified_dcpm_per_wormbase_gene.txt", quote="", stringsAsFactors=FALSE)
 
 head(time_resolved_rna)
 
@@ -38,28 +38,6 @@ time_resolved_rna <- getBM(
 
 ```
 
-## Select relevant columns
-
-Subset the `time_resolved_rna` dataset for `dcpm` columns
-
-```{r}
-time_resolved_rna %>% select(
-  wbps_gene_id,
-  matches(".*EE.*dcpm"),
-  matches(".*EMB.*dcpm"),
-  matches(".*L1.*dcpm"),
-  matches(".*L2.*dcpm"),
-  matches(".*L3.*dcpm"),
-  L4_dcpm,
-  L4b_dcpm,
-  matches(".*YA.*dcpm"),
-  -aggregate_polya_dcpm
-)
-
-time_resolved_rna %>% select(
-  matches(".*l1.*dcpm")
-)
-```
 
 ```{r}
 colnames(time_resolved_rna)
