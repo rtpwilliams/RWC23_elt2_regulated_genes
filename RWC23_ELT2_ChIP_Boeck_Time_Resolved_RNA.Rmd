@@ -7,12 +7,20 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-
+Load libraries
 ```{r}
 library(biomaRt)
 library(tidyverse)
 library(ComplexHeatmap)
+library(readxl)
 ```
+
+Load custom functions
+
+```{r}
+source("RWC23_Functions.R")
+```
+
 
 Pseudocode:
 - Bring in Boeck Data
@@ -25,8 +33,6 @@ Pseudocode:
 ```{r}
 time_resolved_rna <- read.delim("~/Dropbox/01_GITHUBREPO/RWC23_elt2_regulated_genes/02_Data/9_Boeck_et_al_2016_time-resolved_transcriptome/Unified_dcpm_per_wormbase_gene.txt", quote="", stringsAsFactors=FALSE)
 
-head(time_resolved_rna)
-
 paramart <- useMart("parasite_mart", dataset = "wbps_gene", host = "https://parasite.wormbase.org", port = 443)
 
 time_resolved_rna <- getBM(
@@ -36,17 +42,12 @@ time_resolved_rna <- getBM(
   attributes = c("wormbase_gseq","wbps_gene_id", "wikigene_name")
 ) %>% right_join(time_resolved_rna, by = c("wormbase_gseq" = "WormbaseName"))
 
+
+time_resolved_rna <- time_resolved_rna %>% drop_na(wbps_gene_id)
 ```
 
 
 ```{r}
-colnames(time_resolved_rna)
-```
-
-
-
-```{r}
-# initialize blank dataframe
 intestine_rna <- data.frame(WBGeneID = time_resolved_rna$wbps_gene_id, Sequence.name = time_resolved_rna$wormbase_gseq, Public_name = time_resolved_rna$wikigene_name)
 
 ```
@@ -55,84 +56,7 @@ Make Seprate "metadata" dataframe to store descriptive information
 
 ```{r}
 
-RWC23_Metadata <- data.frame(column_ID = colnames(wTF3))
-
-RWC23_Metadata <- RWC23_Metadata %>% 
-  mutate(source_DOI = "10.15252/msb.20167131") %>%
-  mutate(column_detail = c("Cosmid, fosmid or YAC derived gene name", "Accepted gene name", "Unique wormbase accession number", "DNA binding domain")) %>% 
-  mutate(source_detail = "Dataset EV3") %>%
-  mutate(seq_method = "NA")
-
-```
-
-
-
-# Adult Hand dissected intestines
-
-```{r}
-# TFs from Erin's adult intestine RNA-seq that I processed. see `intestine_tfs.Rmd`
-onish_adult <- read.csv("./02_Data/8_Hand_Dissected_Adult_Intestine_RNA-seq/171214_res_gutsVwt_DESeq.csv")
-
-# give the columns orgin-relevant names
-colnames(onish_adult) <- str_c("onish_adult_",colnames(onish_adult))
-
-# check to make sure it looks right
-#View(onish_adult)
-
-# Determine if gene is enriched. Log2(FC) greater than 0 and p adjusted value below 0.05
-onish_adult_enriched <- onish_adult %>% filter(onish_adult$onish_adult_log2FoldChange >= 0, onish_adult$onish_adult_padj <= 0.05)
-
-# merge to master dataframe. If the TF is not in the dataset, give the row values an NA
-intestine_rna <- intestine_rna %>% right_join(onish_adult_enriched, by = c("Sequence.name" = "onish_adult_Gene"))
-
-# create a boolean TRUE/FALSE column if it is present in the intestine.
-intestine_rna <- intestine_rna %>% mutate(onish_adult_bool = if_else(intestine_rna$Sequence.name %in% onish_adult_enriched$onish_adult_Gene, TRUE, FALSE))
-
-# update metadata
-
-RWC23_Metadata <- RWC23_Metadata %>% add_row(
-  column_ID = colnames(onish_adult_enriched[1]),
-  column_detail = "Sequence name from UCSC GTF file",
-  source_DOI = "unpublsihed",
-  source_detail = "RNA-seq of hand dissected adult intestine from the McGhee lab",
-  seq_method = "Illumina"
-  ) %>% add_row(
-  column_ID = colnames(onish_adult_enriched[2]),
-  column_detail = "Mean expression of gene determined by DESeq2",
-  source_DOI = "unpublsihed",
-  source_detail = "RNA-seq of hand dissected adult intestine from the McGhee lab",
-  seq_method = "Illumina"
-  ) %>% add_row(
-  column_ID = colnames(onish_adult_enriched[3]),
-  column_detail = "Log2(Fold Change) of gene determined by DESeq2. Greater than zero is enriched in the intestine. Less than zero is enriched in whole adult worms",
-  source_DOI = "unpublsihed",
-  source_detail = "RNA-seq of hand dissected adult intestine from the McGhee lab",
-  seq_method = "Illumina"
-  ) %>% add_row(
-  column_ID = colnames(onish_adult_enriched[4]),
-  column_detail = "Log2(Fold Change) unshrunken maximum likelihood estimate of gene determined by DESeq2. Used for plots and gene ranks",
-  source_DOI = "unpublsihed",
-  source_detail = "RNA-seq of hand dissected adult intestine from the McGhee lab",
-  seq_method = "Illumina"
-  ) %>% add_row(
-  column_ID = colnames(onish_adult_enriched[5]),
-  column_detail = "Wald statistic of gene determined by DESeq2",
-  source_DOI = "unpublsihed",
-  source_detail = "RNA-seq of hand dissected adult intestine from the McGhee lab",
-  seq_method = "Illumina"
-  ) %>% add_row(
-  column_ID = colnames(onish_adult_enriched[6]),
-  column_detail = "p-value of gene determined by DESeq2",
-  source_DOI = "unpublsihed",
-  source_detail = "RNA-seq of hand dissected adult intestine from the McGhee lab",
-  seq_method = "Illumina"
-  ) %>% add_row(
-  column_ID = colnames(onish_adult_enriched[7]),
-  column_detail = "Adjusted p-value of gene determined by DESeq2",
-  source_DOI = "unpublsihed",
-  source_detail = "RNA-seq of hand dissected adult intestine from the McGhee lab",
-  seq_method = "Illumina"
-  )
+RWC23_Metadata <- data.frame(column_ID = "", column_detail = "", source_DOI = "", source_detail = "", seq_method = "")
 
 ```
 
@@ -140,65 +64,18 @@ RWC23_Metadata <- RWC23_Metadata %>% add_row(
 ## Tintori SC, Nishimura EO, Golden P, Lieb JD, Goldstein B. Dev Cell. 2016;38(4):430-444. doi:10.1101/047746
 
 ```{r}
-# Transcripts from embryonic 1E intestine from Sophie's single cell RNA-seq paper. See `intestine_tfs.Rmd`
-tintori_columns <- c("gene", "p.value", "log.CPM", "log.FC")
-tintori_1E <- read.csv("./02_Data/7_Tintori_et_al_2016_Embryo_scRNA-seq/8cell_vs_1E_p1_00.csv", header = FALSE)
-colnames(tintori_1E) <- str_c("tintori_1E_", tintori_columns)
-
-intestine_rna <- merge(x = intestine_rna, y = tintori_1E, by.x = "Public_name", by.y = "tintori_1E_gene", all.x = T)
-
-# Add boolian column such that it is true if log(FC) is greater than zero and p-value less than 0.05
-
-tintori_1E_enriched <- intestine_rna %>% filter(intestine_rna$tintori_1E_p.value <= 0.05, intestine_rna$tintori_1E_log.FC < 0)
-
-intestine_rna <- intestine_rna %>% mutate(tintori_1E_bool = if_else(intestine_rna$WBGeneID %in% tintori_1E_enriched$WBGeneID, TRUE, FALSE))
-
 # Transcripts from embryonic 2Ep intestine from Sophie's single cell RNA-seq paper. See `intestine_tfs.Rmd`
-tintori_2Ep <- read.csv("./02_Data/7_Tintori_et_al_2016_Embryo_scRNA-seq/16cell_vs_Ep_p1_00.csv", header = FALSE)
+tintori_2Ep <- read.csv("./02_Data/7_Tintori_et_al_2016_Embryo_scRNA-seq/16cell_vs_Ep_p1_00.csv", header = FALSE, stringsAsFactors = FALSE)
 colnames(tintori_2Ep) <- str_c("tintori_2Ep_", tintori_columns)
 
-intestine_rna <- merge(x = intestine_rna, y = tintori_2Ep, by.x = "Public_name", by.y = "tintori_2Ep_gene", all.x = T)
+intestine_rna <- intestine_rna %>% left_join(tintori_2Ep, by = c("Sequence.name" = "tintori_2Ep_gene"))
 
 # Add boolian column such that it is true if log(FC) is greater than zero and p-value less than 0.05
 tintori_2Ep_enriched <- intestine_rna %>% filter(intestine_rna$tintori_2Ep_p.value <= 0.05 & intestine_rna$tintori_2Ep_log.FC < 0)
 
 intestine_rna <- intestine_rna %>% mutate(tintori_2Ep_bool = if_else(intestine_rna$WBGeneID %in% tintori_2Ep_enriched$WBGeneID, TRUE, FALSE))
 
-# Transcripts from embryonic EMS cell from Sophie's single cell RNA-seq paper.
-tintori_EMS <- read.csv("./02_Data/7_Tintori_et_al_2016_Embryo_scRNA-seq/4cell_vs_EMS_p1_00.csv", header = FALSE)
-colnames(tintori_EMS) <- str_c("tintori_EMS_", tintori_columns)
-intestine_rna <- merge(x = intestine_rna, y = tintori_EMS, by.x = "Public_name", by.y = "tintori_EMS_gene", all.x = T)
-tintori_EMS_enriched <- intestine_rna %>% filter(intestine_rna$tintori_EMS_p.value <= 0.05 & intestine_rna$tintori_EMS_log.FC < 0)
-
-intestine_rna <- intestine_rna %>% mutate(tintori_EMS_bool = if_else(intestine_rna$WBGeneID %in% tintori_EMS_enriched$WBGeneID, TRUE, FALSE))
-
 # Update metadata
-
-RWC23_Metadata <- RWC23_Metadata %>% add_row(
-  column_ID = colnames(tintori_1E[1]),
-  column_detail = "Gene sequence name",
-  source_DOI = "10.1016/j.devcel.2016.07.025",
-  source_detail = "Single cell RNA-seq of hand dissected embryo. Accessed from tintori.bio.unc.edu.",
-  seq_method = "Illumina"
-  ) %>% add_row(
-  column_ID = colnames(tintori_1E[2]),
-  column_detail = "Gene p-value",
-  source_DOI = "10.1016/j.devcel.2016.07.025",
-  source_detail = "Single cell RNA-seq of hand dissected embryo. Accessed from tintori.bio.unc.edu.",
-  seq_method = "Illumina"
-  ) %>% add_row(
-  column_ID = colnames(tintori_1E[3]),
-  column_detail = "Counts per transcript per million mapped reads.",
-  source_DOI = "10.1016/j.devcel.2016.07.025",
-  source_detail = "Single cell RNA-seq of hand dissected embryo. Accessed from tintori.bio.unc.edu.",
-  seq_method = "Illumina"
-  ) %>% add_row(
-  column_ID = colnames(tintori_1E[4]),
-  column_detail = "Log2(Fold Change) of gene in the 1E cell when compared to the whole embryo. Less than zero is enriched in the 1E cell. Greater than zero is enriched in the whole 8 cell embryo",
-  source_DOI = "10.1016/j.devcel.2016.07.025",
-  source_detail = "Single cell RNA-seq of hand dissected embryo. Accessed from tintori.bio.unc.edu.",
-  seq_method = "Illumina"
-  )
 
 RWC23_Metadata <- RWC23_Metadata %>% add_row(
   column_ID = colnames(tintori_2Ep[1]),
@@ -225,58 +102,6 @@ RWC23_Metadata <- RWC23_Metadata %>% add_row(
   source_detail = "Single cell RNA-seq of hand dissected embryo. Accessed from tintori.bio.unc.edu.",
   seq_method = "Illumina"
   )
-
-RWC23_Metadata <- RWC23_Metadata %>% add_row(
-  column_ID = colnames(tintori_EMS[1]),
-  column_detail = "Gene sequence name",
-  source_DOI = "10.1016/j.devcel.2016.07.025",
-  source_detail = "Single cell RNA-seq of hand dissected embryo. Accessed from tintori.bio.unc.edu.",
-  seq_method = "Illumina"
-  ) %>% add_row(
-  column_ID = colnames(tintori_EMS[2]),
-  column_detail = "Gene p-value",
-  source_DOI = "10.1016/j.devcel.2016.07.025",
-  source_detail = "Single cell RNA-seq of hand dissected embryo. Accessed from tintori.bio.unc.edu.",
-  seq_method = "Illumina"
-  ) %>% add_row(
-  column_ID = colnames(tintori_EMS[3]),
-  column_detail = "Counts per transcript per million mapped reads.",
-  source_DOI = "10.1016/j.devcel.2016.07.025",
-  source_detail = "Single cell RNA-seq of hand dissected embryo. Accessed from tintori.bio.unc.edu.",
-  seq_method = "Illumina"
-  ) %>% add_row(
-  column_ID = colnames(tintori_EMS[4]),
-  column_detail = "Log2(Fold Change) of gene in the EMS cell when compared to the whole embryo. Less than zero is enriched in the EMS cell. Greater than zero is enriched in the whole 8 cell embryo",
-  source_DOI = "10.1016/j.devcel.2016.07.025",
-  source_detail = "Single cell RNA-seq of hand dissected embryo. Accessed from tintori.bio.unc.edu.",
-  seq_method = "Illumina"
-  )
-```
-
-# A lineage-resolved molecular atlas of C. elegans embryogenesis at single cell resolution
-## Jonathan S. Packer, Qin Zhu, Chau Huynh, Priya Sivaramakrishnan, Elicia Preston, Hannah Dueck, Derek Stefanik, Kai Tan, Cole Trapnell, Junhyong Kim, Robert H. Waterston, John I. Murray doi: https://doi.org/10.1101/565549
-
-```{r}
-#Do not use this data yet. Unpublished and difficult to interpret what all the columns are...
-
-# TFs from embryo single cell RNA-seq (Packer et al 2019)
-#packer_s7_tbl <- readRDS("./../10_DATASETS/11_Packer_et_al_2019_Lineage_Resolved_Embryo/s7_tbl.rds")
-
-#packer_Exx <- packer_s7_tbl %>% filter(lineage == c("Exx"))
-#colnames(packer_Exx) <- str_c("packer_Exx_", colnames(packer_Exx))
-
-#colnames(packer_Exx)
-
-#intestine_rna <- merge(x = intestine_rna, y = packer_Exx, by.x = "WBGeneID", by.y = "packer_Exx_gene.id", all.x = T)
-
-
-
-#packer_Exxx <- packer_s7_tbl %>% filter(lineage == c("Exxx"))
-#colnames(packer_Exxx) <- str_c("packer_Exxx_", colnames(packer_Exxx))
-
-#View(merge(x = intestine_rna, y = packer_Exxx, by.x = "WBGeneID", by.y = "packer_Exxx_gene.id", all.x = T))
-
-
 ```
 
 # Spatiotemporal transcriptomics reveals the evolutionary history of the endoderm germ layer.
@@ -300,104 +125,6 @@ RWC23_Metadata <- RWC23_Metadata %>% add_row(
 
 ```
 
-# Comparative RNA-Seq analysis reveals pervasive tissue-specific alternative polyadenylation in Caenorhabditis elegans intestine and muscles.
-## Blazie SM, Babb C, Wilky H, Rawls A, Park JG, Mangone M. BMC Biol. 2015;13(1):4. doi:10.1186/s12915-015-0116-6
-
-```{r}
-# Tfs from Blaize et al PAB-1 pulldown
-blazieGenes <- read_excel("./02_Data/2_Blazie_et_al_2015_PAB-1_Pulldown_RNA-seq/Blazie_et_al_2015_Table_S3_ges-1_all_genes.xlsx")
-blazieGenesSubset <- data.frame(blazie_WBGeneID = blazieGenes[1], blazie_FPKM = blazieGenes[8])
-colnames(blazieGenesSubset) <- c("blazie_mixed_WBGeneID", "blazie_mixed_FPKM")
-
-#View(blaizeGenesSubset)
-intestine_rna <- merge(x = intestine_rna, y = blazieGenesSubset, by.x = "WBGeneID", by.y = "blazie_mixed_WBGeneID", all.x = TRUE)
-
-# add boolian column
-intestine_rna <- intestine_rna %>% mutate(blazie_mixed_bool = if_else(intestine_rna$WBGeneID %in% blazieGenesSubset$blazie_mixed_WBGeneID, TRUE, FALSE))
-
-# update metadata
-
-RWC23_Metadata <- RWC23_Metadata %>% add_row(
-  column_ID = colnames(blazieGenesSubset[1]),
-  column_detail = "Wormbase Gene ID",
-  source_DOI = "10.1186/s12915-015-0116-6",
-  source_detail = "Table S3. RNA-seq of ges-1P::PAB-1 pulldown"
-  ) %>% add_row(
-  column_ID = colnames(blazieGenesSubset[2]),
-  column_detail = "Fragments per thousand base pairs per million mapped reads",
-  source_DOI = "10.1186/s12915-015-0116-6",
-  source_detail = "Table S3. RNA-seq of ges-1P::PAB-1 pulldown",
-  seq_method = "Illumina"
-  )
-```
-
-# Analysis of C. elegans intestinal gene expression and polyadenylation by fluorescence-activated nuclei sorting and 3′-end-seq.
-## 1. Haenni S, Ji Z, Hoque M, et al. Nucleic Acids Res. 2012;40(13):6304-6318. doi:10.1093/nar/gks282
-
-```{r}
-# TFs from Haenni et al intestine FANS
-haenniGenes <- read.csv("./02_Data/3_Haenni_et_al_Intestine_Nuclei_3end-seq/gks282_supplementary_data/nar-00455-f-2012-File008.csv", header = TRUE)
-
-# compute log2 fold change of the RPM value between "Sorted" intestine cells and "Unsorted"
-haenniGenes <- haenniGenes %>% mutate(log2RPM = log2(haenniGenes$Sorted..RPM.+0.01)/(haenniGenes$Unsorted..RPM.+0.01))
-colnames(haenniGenes) <- c("gene", "geneID", "refID", "chrom", "strand", "unsorted", "sorted", "pvalue", "group", "log2RPM")
-colnames(haenniGenes) <- str_c("haenni_mixed_", colnames(haenniGenes))
-haenni_subset <- data.frame(haenniGenes[1], haenniGenes[6], haenniGenes[7], haenniGenes[8], haenniGenes[9], haenniGenes[10])
-
-#add to master dataframe
-intestine_rna <- merge(x = intestine_rna, y = haenni_subset, by.x = "Sequence.name", by.y = "haenni_mixed_gene", all.x = TRUE)
-
-# compute boolian present/absent column based on authors grouping
-haenni_subset_intestine <- haenni_subset %>% filter(haenni_mixed_group == "Sorted")
-intestine_rna <- intestine_rna%>% mutate(haenni_FANS_bool = if_else(intestine_rna$Sequence.name %in% haenni_subset_intestine$haenni_mixed_gene, TRUE, FALSE))
-
-
-RWC23_Metadata <- RWC23_Metadata  %>% add_row(
-  column_ID = colnames(haenni_subset[1]),
-  column_detail = "Wormbase Gene ID",
-  source_DOI = "10.1093/nar/gks282",
-  source_detail = "Supplementay File 8. RNA-seq of ges-1P::PAB-1 pulldown",
-  seq_method = "Illumina"
-  ) %>% add_row(
-  column_ID = colnames(haenni_subset[2]),
-  column_detail = "RPM of total nuclei in mixed stage worms",
-  source_DOI = "10.1093/nar/gks282",
-  source_detail = "Table S3. RNA-seq of ges-1P::PAB-1 pulldown",
-  seq_method = "Illumina"
-  ) %>% add_row(
-  column_ID = colnames(haenni_subset[3]),
-  column_detail = "RPM of intestine enriched nuclei in mixed stage worms. Sorting based on elt-2P::GFP::H2B JM149",
-  source_DOI = "10.1093/nar/gks282",
-  source_detail = "Table S3. RNA-seq of ges-1P::PAB-1 pulldown",
-  seq_method = "Illumina"
-  )%>% add_row(
-  column_ID = colnames(haenni_subset[4]),
-  column_detail = "Fisher's exact p-value of intestine enriched genes",
-  source_DOI = "10.1093/nar/gks282",
-  source_detail = "Table S3. RNA-seq of ges-1P::PAB-1 pulldown",
-  seq_method = "Illumina"
-  ) %>% add_row(
-  column_ID = colnames(haenni_subset[5]),
-  column_detail = "Categorization of genes. Sorted = intestine enriched, Unsorted = whole worm enriched, Other = somewhere in the middle? ",
-  source_DOI = "10.1093/nar/gks282",
-  source_detail = "Table S3. RNA-seq of ges-1P::PAB-1 pulldown",
-  seq_method = "Illumina"
-  ) %>% add_row(
-  column_ID = colnames(haenni_subset[6]),
-  column_detail = "Log2(Sorted RPM/Unsorted RPM). Greater than zero is intestine enriched, less than zero is whole worm enriched",
-  source_DOI = "10.1093/nar/gks282",
-  source_detail = "Table S3. RNA-seq of ges-1P::PAB-1 pulldown",
-  seq_method = "Illumina"
-  ) %>% add_row(
-  column_ID = "haenni_FANS_bool",
-  column_detail = "True if in the 'Sorted' group ",
-  source_DOI = "10.1093/nar/gks282",
-  source_detail = "Table S3. RNA-seq of ges-1P::PAB-1 pulldown",
-  seq_method = "Illumina"
-  )
-
-```
-
 # Chromosomal clustering and GATA transcriptional regulation of intestine-expressed genes in C. elegans.
 ## Pauli F, Liu Y, Kim Y a, Chen P-J, Kim SK. Development. 2006;133(2):287-295. doi:10.1242/dev.02185
 
@@ -408,7 +135,7 @@ colnames(pauliGenes) <- str_c("pauli_L4_", c("gene", "percentile", "pvalue", "de
 
 # add to master datatable
 
-intestine_rna <- merge(x = intestine_rna, y = pauliGenes, by.x = "Sequence.name", by.y = "pauli_L4_gene", all.x = TRUE)
+intestine_rna <- intestine_rna %>% left_join(pauliGenes, by = c("Sequence.name" = "pauli_L4_gene"))
 
 # make boolian column
 intestine_rna <- intestine_rna %>% mutate(pauli_L4_bool = if_else(intestine_rna$Sequence.name %in% pauliGenes$pauli_L4_gene, TRUE, FALSE))
@@ -540,75 +267,36 @@ Make a vector that contains intestine expressed genes from any stage
 
 ```{r}
 intestine_gene_list <- intestine_rna %>% filter(
-  # onish_adult_bool == TRUE |
-  #   tintori_1E_bool == TRUE |
-    tintori_2Ep_bool == TRUE |
+  tintori_2Ep_bool == TRUE |
     hashimshony_embryo_bool == TRUE |
-    # blazie_mixed_bool == TRUE |
-    # haenni_FANS_bool == TRUE |
     pauli_L4_bool == TRUE |
     spencer_LE_bool == TRUE |
     spencer_L2_bool == TRUE
 ) %>% select(WBGeneID)
+
+dim(intestine_gene_list)
 ```
+
+Import wTF3.0 worm transcription factor database
+
+```{r}
+wTF3.0 <-
+  read.csv("./01_input/TF3-0_namesonly.txt",
+           sep = "\t",
+           header = TRUE) %>% select(WBGeneID)
+```
+
 
 # Filter time-resolved RNA-seq based on intestine expression
 
 ```{r}
-time_resolved_rna_matrix_intestine_counts <- time_resolved_rna %>%
-  select(
-    wbps_gene_id,
-    contains("EMB"),
-    contains("L1_counts"),
-    contains("L2_counts"),
-    contains("L3_counts"),
-    contains("L4_counts"),
-    contains("YA_counts"),
-    -aggregate_polya_counts
-  ) %>%
-  select(wbps_gene_id, contains("counts")) %>%
-  drop_na(wbps_gene_id) %>%
+time_resolved_rna_intestine_df <- time_resolved_rna %>%
   remove_rownames() %>%
   arrange(wbps_gene_id) %>%
-  filter(wbps_gene_id %in% intestine_gene_list$WBGeneID) %>%
-  column_to_rownames(var = "wbps_gene_id") %>%
-  as.matrix()
+  filter(wbps_gene_id %in% intestine_gene_list$WBGeneID)
 
-# colnames(time_resolved_rna_matrix_intestine_counts)
-# time_resolved_rna_chip_annotation <- data.frame(WBGeneID = rownames(time_resolved_rna_matrix_intestine_filtered))
-
-
-```
-
-
-```{r}
-time_resolved_rna_matrix_intestine_counts_scaled <- t(apply(unlist(time_resolved_rna_matrix_intestine_counts), 1, scale))
-colnames(time_resolved_rna_matrix_intestine_counts_scaled) <- colnames(time_resolved_rna_matrix_intestine_counts)
-```
-
-```{r}
-Heatmap(time_resolved_rna_matrix_intestine_counts_scaled,
-        cluster_columns = FALSE,
-        show_row_names = FALSE)
-```
-
-
-dcpm = depth of coverage per base per million reads
-
-```{r}
-time_resolved_rna_matrix_intestine_dcpm <- time_resolved_rna %>%
-  select(
-    wbps_gene_id,
-    contains("EMB"),
-    contains("L1_dcpm"),
-    contains("L2_dcpm"),
-    contains("L3_dcpm"),
-    contains("L4_dcpm"),
-    contains("YA_dcpm"),
-    -aggregate_polya_counts
-  ) %>%
-  select(wbps_gene_id, contains("dcpm")) %>%
-  drop_na(wbps_gene_id) %>%
+time_resolved_rna_matrix_intestine <- time_resolved_rna %>%
+  select(-wormbase_gseq, -wikigene_name, -LENGTH) %>%
   remove_rownames() %>%
   arrange(wbps_gene_id) %>%
   filter(wbps_gene_id %in% intestine_gene_list$WBGeneID) %>%
@@ -618,82 +306,141 @@ time_resolved_rna_matrix_intestine_dcpm <- time_resolved_rna %>%
 
 
 ```{r}
-Heatmap(time_resolved_rna_matrix_intestine_dcpm,
+time_resolved_rna_matrix_intestine_scaled <- t(apply(unlist(time_resolved_rna_matrix_intestine), 1, scale))
+colnames(time_resolved_rna_matrix_intestine_scaled) <- colnames(time_resolved_rna_matrix_intestine)
+```
+
+Store index of relavent genes for row annotations
+
+```{r}
+gene_index <- c(
+  which(time_resolved_rna_intestine_df$wikigene_name == "end-1"),
+  which(time_resolved_rna_intestine_df$wikigene_name == "elt-2"),
+  which(time_resolved_rna_intestine_df$wikigene_name == "elt-7"),
+  which(time_resolved_rna_intestine_df$wikigene_name == "elt-4"),
+  which(time_resolved_rna_intestine_df$wikigene_name == "pqm-1")
+)
+gene_index_names <- c("end-1", "elt-2", "elt-7", "elt-4", "pqm-1")
+
+time_resolved_rna_intestine_df %>% filter(wikigene_name %in% gene_index_names)
+```
+
+
+```{r}
+Boeck_intestine_RNA <- Heatmap(time_resolved_rna_matrix_intestine_scaled,
         cluster_columns = FALSE,
-        show_row_names = FALSE)
+        show_row_names = FALSE,
+        row_km = 5) +
+  rowAnnotation(foo = anno_mark(gene_index, labels = gene_index_names))
+Boeck_intestine_RNA
+# pdf(file = "./03_plots/200720_Boeck_RNA_Intestine.pdf", width = 7, height = 7)
+# Boeck_intestine_RNA
+# dev.off()
 ```
 
-```{r}
-time_resolved_rna_matrix_intestine_dcpm_scaled <- t(apply(unlist(time_resolved_rna_matrix_intestine_dcpm), 1, scale))
-colnames(time_resolved_rna_matrix_intestine_dcpm_scaled) <- colnames(time_resolved_rna_matrix_intestine_dcpm)
-```
+Filter heatmap for only transcription factors
 
 ```{r}
-Heatmap(time_resolved_rna_matrix_intestine_dcpm_scaled,
-        cluster_columns = FALSE,
-        show_row_names = FALSE)
-```
+time_resolved_rna_matrix_intestine_scaled_TFONLY <-
+  matrix_select(time_resolved_rna_matrix_intestine_scaled, wTF3.0$WBGeneID)
 
-
-
-```{r}
-time_resolved_rna_chip_annotation <- time_resolved_rna_matrix_intestine_filtered %>%
-    as.data.frame.matrix() %>%
-    rownames_to_column() %>%
-    left_join(rownames_to_column(binding_cluster_gene_counts), by = "rowname") %>%
-    select(rowname, all_of(elt2_cluster_names)) %>%
-    replace_na(list(
-      Embryo_Specific = 0,
-      Larval = 0,
-      Increasing = 0,
-      L3_High = 0,
-      Not_Changing = 0
-    ))
-
-names(time_resolved_rna_chip_annotation)[names(time_resolved_rna_chip_annotation) == "rowname"] <- "WBGeneID"
-
-time_resolved_rna_chip_annotation <- make_cluster_binary_annotation(time_resolved_rna_chip_annotation)
-head(time_resolved_rna_chip_annotation)
-```
-
-```{r}
 Heatmap(
-  matrix_select(time_resolved_rna_matrix_intestine_dcpm_scaled, 
-                filter(time_resolved_rna_chip_annotation, Embryo_Specific == "present")$WBGeneID),
-  cluster_columns = FALSE
-)
+  time_resolved_rna_matrix_intestine_scaled_TFONLY,
+  cluster_columns = FALSE,
+  show_row_names = FALSE,
+  row_km = 6
+) +
+  rowAnnotation(foo = anno_mark(
+    at = c(
+      which(
+        rownames(time_resolved_rna_matrix_intestine_scaled_TFONLY) == "WBGene00001250"
+      ),
+      which(
+        rownames(time_resolved_rna_matrix_intestine_scaled_TFONLY) == "WBGene00001252"
+      ),
+      which(
+        rownames(time_resolved_rna_matrix_intestine_scaled_TFONLY) == "WBGene00001310"
+      ),
+      which(
+        rownames(time_resolved_rna_matrix_intestine_scaled_TFONLY) == "WBGene00004096"
+      ),
+      which(
+        rownames(time_resolved_rna_matrix_intestine_scaled_TFONLY) == "WBGene00015981"
+      )
+    ),
+    labels = c("elt-2", "elt-4", "end-1", "pqm-1", "elt-7")
+  ))
 ```
+
+
+# Import ELT-2 ChIP-seq binding data
 
 ```{r}
-Heatmap(
-  matrix_select(time_resolved_rna_matrix_intestine_dcpm_scaled, 
-                filter(time_resolved_rna_chip_annotation, Larval == "present")$WBGeneID),
-  cluster_columns = FALSE
-)
-```
+ELT2_GRange <- readRDS(file = "./01_input/200719_annotatedPeaks.rds")
+
+chip_df <- mcols(ELT2_GRange)
 
 
-```{r}
-Heatmap(
-  matrix_select(time_resolved_rna_matrix_intestine_dcpm_scaled, 
-                filter(time_resolved_rna_chip_annotation, Increasing == "present")$WBGeneID),
-  cluster_columns = FALSE
-)
+head(chip_df)
 ```
+
+# Subset ELT-2 ChIP with literature Intestine Expression
 
 ```{r}
-Heatmap(
-  matrix_select(time_resolved_rna_matrix_intestine_dcpm_scaled, 
-                filter(time_resolved_rna_chip_annotation, L3_High == "present")$WBGeneID),
-  cluster_columns = FALSE
-)
+chip_rna_df <-
+  as.data.frame(chip_df) %>% remove_rownames() %>% 
+  select(name, k4labels, feature)  %>% 
+  right_join(time_resolved_rna, by = c("feature" = "wbps_gene_id")) %>% 
+  replace_na(list("k4labels" = "Not_Bound", "name" = "Not_Bound"))
+
+chip_rna_df$k4labels <-
+  factor(
+    chip_rna_df$k4labels,
+    levels = c(
+      "LE-specific",
+      "Post-embryonic",
+      "Increasing",
+      "L3-high",
+      "Not-changing or not IDR-passing",
+      "Not.Bound"
+    ),
+    labels = c(
+      "Embryo_Specific",
+      "Larval",
+      "Increasing",
+      "L3_High",
+      "Not_Changing",
+      "Not_Bound"
+    )
+  )
 ```
 
+# Subset heatmap based on ELT-2 binding pattern
+
 ```{r}
-Heatmap(
-  matrix_select(time_resolved_rna_matrix_intestine_dcpm_scaled, 
-                filter(time_resolved_rna_chip_annotation, Not_Changing == "present")$WBGeneID),
-  cluster_columns = FALSE
-)
+gut_chip_rna_df <- chip_rna_df %>% semi_join(intestine_gene_list, c("feature" = "WBGeneID")) 
+gut_chip_rna_matrix <- gut_chip_rna_df %>% select(emb_4cell:gonad) %>% as.matrix() 
+BoeckRNA_ELT2_chip <- Heatmap(row_scale(gut_chip_rna_matrix),
+        name = "Boeck Time Resolved RNA",
+        row_split = gut_chip_rna_df$k4labels,
+        row_title = NULL,
+        cluster_columns = FALSE) +
+  rowAnnotation(ELT2_peak = gut_chip_rna_df$k4labels, 
+                col = list(ELT2_peak = c(
+      "Embryo_Specific" = "#7570B3",
+      "Larval" = "#1B9E77",
+      "Increasing" = "#E7298A",
+      "L3_High" = "#D95F02",
+      "Not_Changing" = "#505050",
+      "Not_Bound" = "black"
+    )),
+    border = TRUE
+  )
+BoeckRNA_ELT2_chip
+
+# pdf(file = "./03_plots/200720_Boeck_RNA_ELT2ChIP_Patterns.pdf", width = 7, height = 7)
+# BoeckRNA_ELT2_chip
+# dev.off()
 ```
+
 

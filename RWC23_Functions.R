@@ -184,7 +184,6 @@ RNA_heatmap2 <- function(mat, column_split = NULL, row_title = NULL, row_split =
     # ))
   )
 }
-IAMHERE FIX RNAheatmap()
 
 
 # elt2_l1_row_annotation() should be used in conjuntion with RNA_heatmap().
@@ -295,4 +294,8 @@ make_cluster_binary_annotation <- function(input_matrix){
       )
     )}
 
-
+row_scale <- function(mat){
+  scale_mat <-t(apply(unlist(mat), 1, scale))
+  colnames(scale_mat) <- colnames(mat)
+  scale_mat
+}

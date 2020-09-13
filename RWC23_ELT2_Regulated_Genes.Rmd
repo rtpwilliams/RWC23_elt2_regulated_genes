@@ -1024,7 +1024,40 @@ SET4 genes only go down in elt-2 (-);elt-7 (-)
 variance_per_gene %>% filter(set == "SET4") %>% arrange(desc(variance))
 ```
 
-SET4 cgc strain: OP509 (ets-4)
+SET4 cgc strain: OP509 (ets-4).  
+
+Make a plot with these genes annotated.  
+
+```{r}
+
+genes_to_test <- variance_per_gene %>% filter(external_gene_id %in% c("ets-4", "gla-3", "mtl-2", "pqm-1")) %>% select(wbps_gene_id, external_gene_id)
+
+Ha_bound_only_test_gene <- Ha_bound_only +
+  rowAnnotation(foo = anno_mark(
+    at = c(
+      which(
+        rownames(dynamic_counts_matrix_scaled_bound_only) == genes_to_test$wbps_gene_id[1]
+      ),
+      which(
+        rownames(dynamic_counts_matrix_scaled_bound_only) == genes_to_test$wbps_gene_id[2]
+      ),
+      which(
+        rownames(dynamic_counts_matrix_scaled_bound_only) == genes_to_test$wbps_gene_id[3]
+      ),
+      which(
+        rownames(dynamic_counts_matrix_scaled_bound_only) == genes_to_test$wbps_gene_id[4]
+      )
+    ),
+    labels = genes_to_test$external_gene_id
+  ))
+
+Ha_bound_only_test_gene
+
+# pdf(file = "./03_plots/200729_ELT2_DE_Genes_ELT2bound_Test_Genes_Annotated.pdf", width = 5, height = 5)
+# Ha_bound_only_test_gene
+# dev.off()
+```
+
 
 # L1 Intestine expression row annotation
 
