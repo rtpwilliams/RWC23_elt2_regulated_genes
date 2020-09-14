@@ -45,10 +45,6 @@ library(binom)
 library(circlize)
 ```
 
-# To do
-
-- Finish adding dialog
-- Add spencer LE and L2 intestine expression data to dineen heatmap
 
 # Background and Rationale
 
@@ -78,7 +74,7 @@ For clusters of transcription factors (TFs) differentially expressed during elt-
 
 # Description of Data
 
-I will integrate two RNA-seq experiments and a ChIP-seq experiments.
+I will integrate a RNA-seq experiment, a microarray experiment and a ChIP-seq experiments.
 
 The first is a set of RNA-seq experiments in L1 stage worms (Dineen and Nishimura, 2018). They were collected from the following genotypes, all in the L1 stage: 
 
@@ -89,7 +85,7 @@ The first is a set of RNA-seq experiments in L1 stage worms (Dineen and Nishimur
 
 The purpose of including elt-7 and elt-2/elt-7 double deletion is because these two transcription factors have overlapping functionality. Deletion of elt-7 alone does not have a phenotype, but deletion of elt-7 in combination with elt-2 has an enhanced lethal phenotype of just elt-2 alone.
 
-The second RNA-seq experiment is from FACS sorted L1 stage intestine cells. This data is unpublished.  
+The second dataset is from a 2011 paper using FACS sorting of Late Embryo (LE) and Larval Stage 2 (L2) intestine cells, measured with microarray. See [Spencer et. al, (2011)](https://pubmed.ncbi.nlm.nih.gov/21177967/).  
 
 The ChIP-seq experiments are performed against ELT-2 and are from the following developmental stages:
 
@@ -121,7 +117,7 @@ They were collected as part of the modENCODE consortium and were processed by Da
 ## Source functions
 
 ```{r}
-source("./RWC23_Functions.R")
+source("../RWC23_Functions.R")
 ```
 
 # Load and Process Datasets
@@ -145,7 +141,7 @@ list of all dynamically expressed genes
 
 ```{r}
 dynamic_regulated_genes <-
-  read.table(file = "./05_fromErin/2017-11-20_all_changing_genes_0.1alpha_0.8lfc.txt",
+  read.table(file = "./01_input/2017-11-20_all_changing_genes_0.1alpha_0.8lfc.txt",
              quote = "",
              header = FALSE)
 colnames(dynamic_regulated_genes) <- "WBGeneID"
@@ -346,9 +342,26 @@ RNA_column_order
 
 
 ```{r}
-column_labels <- structure(c("rep1", "rep2", "rep3", "rep4", "rep1", "rep2", "rep3", "rep1", "rep2", "rep3", "rep4", "rep1", "rep2", "rep3"),
-                           names = colnames(dynamic_counts_matrix_scaled_ascend)
-)
+column_labels <-
+  structure(
+    c(
+      "rep1",
+      "rep2",
+      "rep3",
+      "rep4",
+      "rep1",
+      "rep2",
+      "rep3",
+      "rep1",
+      "rep2",
+      "rep3",
+      "rep4",
+      "rep1",
+      "rep2",
+      "rep3"
+    ),
+    names = colnames(dynamic_counts_matrix_scaled_ascend)
+  )
 
 column_labels
 ```
@@ -433,9 +446,48 @@ Ha_L1chip <-
 
 Ha_L1chip
 
-pdf("./03_plots/figure_1/200615_Figure1A_elt2elt7DERNAseq_L1elt2bound_heatmap.pdf", height = 4, width = 4.5)
-Ha_L1chip
-dev.off()
+# pdf("./03_plots/01a_DE_Heatmap_elt2elt7DERNAseq_L1elt2bound_200615.pdf", height = 4, width = 4.5)
+# Ha_L1chip
+# dev.off()
+```
+
+Add Spencer intestine data
+
+```{r}
+spencer_rna_anno <- data.frame(
+  spencerLE = ifelse(
+    test = rownames(dynamic_counts_matrix_scaled_ascend) %in% spencer_LE_subset$spencer_LE_ID,
+    yes = "enriched",
+    no = "depleted"
+  ),
+  spencerL2 = ifelse(
+    test = rownames(dynamic_counts_matrix_scaled_ascend) %in% spencer_L2_subset$spencer_L2_ID,
+    yes = "enriched",
+    no = "depleted"
+  )
+)
+
+Ha_L1chip_spencer <- Ha_L1chip +
+  rowAnnotation(
+    LE.intestine = spencer_rna_anno$spencerLE,
+    col = list(LE.intestine = c(
+      "enriched" = "blue", "depleted" = "white"
+    )),
+    border = TRUE
+  ) +
+  rowAnnotation(
+    L2.intestine = spencer_rna_anno$spencerL2,
+    col = list(L2.intestine = c(
+      "enriched" = "blue", "depleted" = "white"
+    )),
+    border = TRUE
+  )
+
+Ha_L1chip_spencer
+
+# pdf("./03_plots/01b_DE_Heatmap_elt2elt7DERNAseq_L1elt2bound_spencerRNA_200913.pdf", height = 6.5, width = 6)
+# Ha_L1chip_spencer
+# dev.off()
 ```
 
 Visually it appears that some elt2/elt7 differential expression clusters have more or less ELT-2 binding associated with the sets. I would like to be more quantitative with this assesment.  
@@ -508,7 +560,7 @@ l1bound_percents <-
 
 l1bound_percents
 
-# ggsave("./03_plots/200428_proportion_of_l1elt2_per_expression_cluster.pdf", height = 2, width = 5)
+# ggsave("./03_plots/02_proportion_of_l1elt2_per_expression_cluster_200428.pdf", height = 2, width = 5)
 ```
 
 This plot shows that all of the differential expression sets have less than 50% of genes bound by ELT-2.  
@@ -533,7 +585,7 @@ ggplot(clust_L1bound_counts_ggplot,
   theme_bw() +
   theme(axis.text.x = element_text(size = 13))
 
-# ggsave("./03_plots/200428_number_of_l1elt2_per_expression_cluster.pdf", height = 2, width = 5)
+# ggsave("./03_plots/03_number_of_l1elt2_per_expression_cluster_200428.pdf", height = 2, width = 5)
 ```
 
 
@@ -591,7 +643,7 @@ l1bound_percents +
   ggtitle("L1 stage ELT-2 binding per\nexperession set")
 
 # ggsave(
-#   "./03_plots/figure_1/200615_Figure1B_percentage_l1bound_per_expression_cluster.pdf",
+#   "./03_plots/04_percentage_l1bound_per_expression_cluster_200615.pdf",
 #   width = 4,
 #   height = 5
 # )
@@ -687,10 +739,39 @@ Ha_L1chip_clusterchip <-
 
 Ha_L1chip_clusterchip
 
-# pdf("./03_plots/figure_1/200615_Figure1A_wt_RNA_L1elt2bound_elt2bindclusters_heatmap.pdf", height = 4.5, width = 4)
+# The code below sometimes throws an error
+# if so: print plot in console, then use Export>As PDF to save
+# pdf("./03_plots/05a_DE_Heatmap_L1elt2bound_elt2bindclusters_anno_200615.pdf", height = 6.5, width = 6)
 # Ha_L1chip_clusterchip
 # dev.off()
 ```
+
+Add Spencer intestine RNA row annotation
+
+```{r}
+Ha_L1chip_clusterchip_spencerRNA <- Ha_L1chip_clusterchip +
+  rowAnnotation(
+    LE.intestine = spencer_rna_anno$spencerLE,
+    col = list(LE.intestine = c(
+      "enriched" = "blue", "depleted" = "white"
+    )),
+    border = TRUE
+  ) +
+  rowAnnotation(
+    L2.intestine = spencer_rna_anno$spencerL2,
+    col = list(L2.intestine = c(
+      "enriched" = "blue", "depleted" = "white"
+    )),
+    border = TRUE
+  )
+
+Ha_L1chip_clusterchip_spencerRNA
+
+# pdf("./03_plots/05b_DE_Heatmap_L1elt2bound_elt2bindclusters_spencerRNA_anno_200913.pdf", height = 6.5, width = 8)
+# Ha_L1chip_clusterchip_spencerRNA
+# dev.off()
+```
+
 
 Plot percentage of expression cluster group having binding pattern assignment.  
 
@@ -700,7 +781,7 @@ exprclust_bindclust <-
     dineen_nishimura_sets_ascend,
     chip_annotation_present_absent,
     by.x = "WBGeneID",
-    by.y = "rowname"
+    by.y = "WBGeneID"
   )
 
 exprclust_bindclust %>% head
@@ -732,7 +813,7 @@ expressionSet_per_BindingCluster
 ```
 
 
-Make a plot that addresses the question: 
+Make a plot that addresses the question: What is the percentage of genes with annotated ELT2 binding clusters per expression dataset?
 
 ```{r}
 ggplot(expressionSet_per_BindingCluster,
@@ -743,7 +824,7 @@ ggplot(expressionSet_per_BindingCluster,
   theme_classic() +
   scale_fill_manual(values = as.vector(cluster_colors$val))
 
-# ggsave("./03_plots/figure_1/200615_FigureS1A_Cluster_percent_present_per_Set.pdf")
+# ggsave("./03_plots/06_Cluster_percent_present_per_Set_200615.pdf")
 ```
 
 # What is the percentage of genes within each Expression Set that are associated with an ELT-2 binding cluster?
@@ -754,13 +835,10 @@ ggplot(expressionSet_per_BindingCluster,
   geom_bar(stat = "identity", position = "fill") +
   theme_classic()
 
-# ggsave("./03_plots/figure_1/200615_FigureS1B_Set_percent_present_per_Cluster.pdf")
+# ggsave("./03_plots/07_Set_percent_present_per_Cluster_200615.pdf")
 ```
 
 Make a series of horizontal barplots with percentage of ELT-2 binding cluster per expression cluster.  
-
-TODO: Make a function that does all that is below.  
-
 
 First, calculate the percentage of each ELT-2 binding category against the total dataset.  
 
@@ -844,21 +922,24 @@ ggplot(expression_binding_stats,
   facet_grid(. ~ ELT2_cluster) +
   scale_fill_manual(values = as.character(cluster_colors$val))
 
-# ggsave(filename = "./03_plots/figure_1/200615_Figure1C_Percent_of_ELT2bindClust_per_ExpressionClust.pdf",
+# ggsave(filename = "./03_plots/08_Percent_of_ELT2bindClust_per_ExpressionClust_200615.pdf",
 #        height = 5,
 #        width = 7)
 ```
 
 # Subset ELT-2/ELT-7 differentially expressed genes based on ELT-2 binding in L1 stage
 
-IAMHERE: FIX RNA_heatmap Function to look pretty like the `Ha` plot
 
 ```{r}
-RNA_heatmap2(dynamic_counts_matrix_scaled_ascend,
-            column_split = RNA_column_order,
-            row_split = elt2_L1_anno$elt2_detected_in_L1) +
+RNA_heatmap2(
+  dynamic_counts_matrix_scaled_ascend,
+  column_split = RNA_column_order,
+  row_split = elt2_L1_anno$elt2_detected_in_L1
+) +
   elt2_l1_row_annotation(elt2_L1_anno) +
   binding_cluster_row_annotation(chip_annotation_present_absent)
+
+
 ```
 
 
@@ -903,6 +984,10 @@ Ha_bound_only <-
               row_title = c("SET2", "SET3", "SET1", "SET4"))
 
 Ha_bound_only
+
+# pdf("./03_plots/09a_DE_Heatmap_L1elt2boundOnly_200913.pdf", height = 6.5, width = 6)
+# Ha_bound_only
+# dev.off()
 ```
 
 ```{r}
@@ -927,211 +1012,205 @@ head(bound_only_annotation_ascend)
 Ha_bound_only_chipClust <-
   Ha_bound_only + binding_cluster_row_annotation(bound_only_elt2_clust_anno)
 Ha_bound_only_chipClust
-```
 
-# Fish out the genes that change the most and look for CGC stains
-
-```{r}
-cgc_strains <- readLines("./01_input/200608_cgc-strains.txt")
-
-cgc_strains <- str_trim(cgc_strains)
-head(cgc_strains, n = 40)
-
-total_strains <- sum(str_count(cgc_strains, pattern = "-----------------------------------------------------------------------------"))
-
-cgc_strains_df <- data.frame(
-  strain = cgc_strains[str_which(cgc_strains, "Strain:")],
-  species = cgc_strains[str_which(cgc_strains, "Species:")],
-  genotype = cgc_strains[str_which(cgc_strains, "Genotype:")],
-  description = cgc_strains[str_which(cgc_strains, "Description:")],
-  mutagen = cgc_strains[str_which(cgc_strains, "Mutagen:")],
-  outcrossed = cgc_strains[str_which(cgc_strains, "Outcrossed:")],
-  made.by = cgc_strains[str_which(cgc_strains, "Made by:")],
-  received = cgc_strains[str_which(cgc_strains, "Received:")],
-  stringsAsFactors = FALSE,
-  
-)
-
-counter = 1
-cgc_strains_df <- data.frame(stringsAsFactors = FALSE)
-for (i in 1:(total_strains)){
-  to_append <- data.frame(string = str_c(c(cgc_strains[(counter+1):(counter+8)]), collapse = "\t"), stringsAsFactors = FALSE)
-  cgc_strains_df <- bind_rows(cgc_strains_df, to_append)
-  counter <- counter + 9
-}
-
-# cgc_strains_list <- str_split(cgc_strains_df$string, pattern = "\t")
-# 
-# str(cgc_strains_list)
-# cgc_strains_df$string[str_detect(cgc_strains_df$string, pattern = "elt-2")]
-```
-
-
-```{r}
-variance_per_gene <-  as.data.frame(matrix_select(dynamic_counts_matrix, l1_bound_list$WBGeneID)) %>% rownames_to_column(var = "WBGeneID") %>% 
-    merge(bound_only_sets, by = "WBGeneID") %>% 
-    pivot_longer(wt_sorted_1:elt2Delt7D_sorted_3, names_to = "sample", values_to = "rlogCount") %>%
-    group_by(WBGeneID, set) %>%
-    summarise(variance = var(rlogCount))
-
-variance_per_gene <- getBM(
-  mart = paramart,
-  filter = c("wbps_gene_id"),
-  value = variance_per_gene$WBGeneID,
-  attributes = c('wbps_gene_id', 'external_gene_id')
-) %>% inner_join(variance_per_gene, by = c("wbps_gene_id" = "WBGeneID"))
-
-variance_per_gene %>% mutate(cgc_count = 
-                               sum(str_count(cgc_strains_df$string, pattern = "elt-2"))
-                             ) %>% arrange(desc(cgc_count))
-
-cgc_count_column <- c()
-for (i in variance_per_gene$external_gene_id){
-  cgc_count_column <- append(cgc_count_column, sum(str_count(cgc_strains_df$string, pattern = paste(i, "(?![:digit:])", sep = "")
-                                                             )))
-}
-
-variance_per_gene <- variance_per_gene %>% mutate(cgc_count = cgc_count_column)
-```
-
-SET1 genes are up in wildtype but down in elt-2 (-) and do not change with elt-7 (-) single or double. In other words, activated alone by ELT-2
-
-```{r}
-variance_per_gene %>% filter(set == "SET1") %>% arrange(desc(variance))
-```
-
-SET1 strains to order: strain CL2122 (mtl-2)
-
-SET2 genes go up only in elt-2 (-)
-
-```{r}
-variance_per_gene %>% filter(set == "SET2") %>% arrange(desc(variance)) %>% filter(cgc_count > 1)
-```
-
-SET2 genes to order: OP201 (pqm-1)
-
-SET3 genes go up in elt-2 (-) and go up a little higher in elt-2 (-);elt-7 (-)
-
-```{r}
-variance_per_gene %>% filter(set == "SET3") %>% arrange(desc(variance))
-```
-
-SET3 order: OP750 (gla-3)
-
-SET4 genes only go down in elt-2 (-);elt-7 (-)
-
-```{r}
-variance_per_gene %>% filter(set == "SET4") %>% arrange(desc(variance))
-```
-
-SET4 cgc strain: OP509 (ets-4).  
-
-Make a plot with these genes annotated.  
-
-```{r}
-
-genes_to_test <- variance_per_gene %>% filter(external_gene_id %in% c("ets-4", "gla-3", "mtl-2", "pqm-1")) %>% select(wbps_gene_id, external_gene_id)
-
-Ha_bound_only_test_gene <- Ha_bound_only +
-  rowAnnotation(foo = anno_mark(
-    at = c(
-      which(
-        rownames(dynamic_counts_matrix_scaled_bound_only) == genes_to_test$wbps_gene_id[1]
-      ),
-      which(
-        rownames(dynamic_counts_matrix_scaled_bound_only) == genes_to_test$wbps_gene_id[2]
-      ),
-      which(
-        rownames(dynamic_counts_matrix_scaled_bound_only) == genes_to_test$wbps_gene_id[3]
-      ),
-      which(
-        rownames(dynamic_counts_matrix_scaled_bound_only) == genes_to_test$wbps_gene_id[4]
-      )
-    ),
-    labels = genes_to_test$external_gene_id
-  ))
-
-Ha_bound_only_test_gene
-
-# pdf(file = "./03_plots/200729_ELT2_DE_Genes_ELT2bound_Test_Genes_Annotated.pdf", width = 5, height = 5)
-# Ha_bound_only_test_gene
+# pdf("./03_plots/09b_DE_Heatmap_L1elt2boundOnly_elt2bindclusters_anno_200913.pdf", height = 6.5, width = 6)
+# Ha_bound_only_chipClust
 # dev.off()
 ```
-
-
-# L1 Intestine expression row annotation
-
-Import RWC24 L1 Intestine results table
+## Add Spencer intestine expression row annotation
 
 ```{r}
-RWC24_res <-
-  read.csv(
-    "../RWC24_L1_Intestine_RNAseq/04_DEseq2/200511_L1_intestine_FACS_gut_vs_gutless.csv",
-    row.names = 1
+
+bound_only_spencer_rna_anno <- data.frame(
+  spencerLE = ifelse(
+    test = rownames(dynamic_counts_matrix_scaled_bound_only) %in% spencer_LE_subset$spencer_LE_ID,
+    yes = "enriched",
+    no = "depleted"
+  ),
+  spencerL2 = ifelse(
+    test = rownames(dynamic_counts_matrix_scaled_bound_only) %in% spencer_L2_subset$spencer_L2_ID,
+    yes = "enriched",
+    no = "depleted"
   )
-RWC24_res <- RWC24_res %>% rownames_to_column(var = "WBGeneID")
-head(RWC24_res)
-```
+)
 
-Select log fold change data for row annotation.  
+Ha_bound_only_chipClust_spencer <- Ha_bound_only_chipClust +
+  rowAnnotation(
+    LE.intestine = bound_only_spencer_rna_anno$spencerLE,
+    col = list(LE.intestine = c(
+      "enriched" = "blue", "depleted" = "white"
+    )),
+    border = TRUE
+  ) +
+  rowAnnotation(
+    L2.intestine = bound_only_spencer_rna_anno$spencerL2,
+    col = list(L2.intestine = c(
+      "enriched" = "blue", "depleted" = "white"
+    )),
+    border = TRUE
+  )
 
-```{r}
-L1_gut_lfc <-
-  dynamic_counts_matrix_scaled_ascend %>% as.data.frame.matrix() %>% rownames_to_column(var = "WBGeneID") %>% inner_join(RWC24_res, by = "WBGeneID") %>% select(WBGeneID, log2FoldChange)
-```
+Ha_bound_only_chipClust_spencer
 
-Add to heatmap as a row annotation.  
-
-```{r}
-col_fun = colorRamp2(c(-10, 0, 10), c("blue", "white", "red"))
-
-Ha_L1chip_L1gutLFC <-
-  Ha_L1chip + rowAnnotation(L1_Gut_LFC = L1_gut_lfc$log2FoldChange,
-                            col = list(L1_Gut_LFC = col_fun))
-Ha_L1chip_L1gutLFC
-
-# pdf(file = "./03_plots/200511_AnyDE_Genes_ELT2_ELT7_L1gutLFC.pdf", width = 5, height = 5)
-# Ha_L1chip_L1gutLFC
+# pdf("./03_plots/09c_DE_Heatmap_L1elt2boundOnly_elt2bindclusters_anno_200913.pdf", height = 6.5, width = 6)
+# Ha_bound_only_chipClust_spencer
 # dev.off()
 ```
 
+## What is the percentage of genes with annotated ELT2 binding clusters per expression dataset?
+
 ```{r}
-RNA_heatmap(dynamic_counts_matrix_scaled_ascend,
-            split = elt2_L1_anno$elt2_detected_in_L1) +
-  rowAnnotation(L1_Gut_LFC = L1_gut_lfc$log2FoldChange,
-                col = list(L1_Gut_LFC = col_fun))
+bound_only_exprclust_bindclust <-
+  merge(bound_only_sets,
+        chip_annotation_present_absent,
+        by.x = "WBGeneID",
+        by.y = "WBGeneID")
+
+bound_only_exprclust_bindclust %>% head
 ```
 
 
-# Intestine expression annotation for only ELT-2 bound genes
+Make a dataframe that addresses the question: 
 
 ```{r}
-bound_only_L1_gut_lfc <-
-  dynamic_counts_matrix_scaled_bound_only %>% as.data.frame.matrix() %>% rownames_to_column(var = "WBGeneID") %>% inner_join(RWC24_res, by = "WBGeneID") %>% select(WBGeneID, log2FoldChange)
 
-identical(
-  bound_only_L1_gut_lfc$WBGeneID,
-  rownames(dynamic_counts_matrix_scaled_bound_only)
-)
+bound_only_expressionSet_per_BindingCluster <- data.frame()
+for (i in elt2_cluster_names) {
+  toappend <-
+    table(bound_only_exprclust_bindclust$set,
+          bound_only_exprclust_bindclust[[i]]) %>%
+    as.data.frame.matrix() %>%
+    rownames_to_column(var = "set") %>%
+    mutate(ELT2_cluster = i,
+           percent = present / (present + absent))
+  bound_only_expressionSet_per_BindingCluster <-
+    bind_rows(bound_only_expressionSet_per_BindingCluster, toappend)
+}
 
-Ha_bound_only + rowAnnotation(L1_Gut_LFC = bound_only_L1_gut_lfc$log2FoldChange,
-                              col = list(L1_Gut_LFC = col_fun))
+bound_only_expressionSet_per_BindingCluster$ELT2_cluster <-
+  factor(bound_only_expressionSet_per_BindingCluster$ELT2_cluster,
+         levels = elt2_cluster_names)
+
+bound_only_expressionSet_per_BindingCluster
 ```
 
-Next: better display of `L1_Gut_LFC`. Perform GO for the different clusters in this plot. Compare motifs of peaks assigned to genes within each cluster (or activated sets 1 and 2 and repressed sets 3 4 and 5). 
 
-Make an MA plot for each set
+Make a plot that addresses the question: What is the percentage of genes with annotated ELT2 binding clusters per expression dataset?
 
 ```{r}
 ggplot(
-  RWC24_res %>% rownames_to_column(var = "WBGeneID") %>% inner_join(bound_only_sets, by = "WBGeneID"),
-  aes(x = baseMean, y = log2FoldChange, color = pvalue < 0.01)
+  bound_only_expressionSet_per_BindingCluster,
+  aes(x = set,
+      y = present,
+      fill = ELT2_cluster)
 ) +
-  geom_point() +
-  scale_x_log10() +
-  facet_wrap(~ set)
+  geom_bar(stat = "identity", position = "fill") +
+  theme_classic() +
+  scale_fill_manual(values = as.vector(cluster_colors$val))
+
+# ggsave("./03_plots/10a_Bound_Only_Cluster_percent_present_per_Set_200913.pdf")
 ```
 
+## What is the percentage of genes within each Expression Set that are associated with an ELT-2 binding cluster?
+
+```{r}
+ggplot(
+  bound_only_expressionSet_per_BindingCluster,
+  aes(x = ELT2_cluster, y = present, fill = set)
+) +
+  geom_bar(stat = "identity", position = "fill") +
+  theme_classic()
+
+# ggsave("./03_plots/10b_Bound_Only_Set_percent_present_per_Cluster_200913.pdf")
+```
+
+Make a series of horizontal barplots with percentage of ELT-2 binding cluster per expression cluster.  
+
+First, calculate the percentage of each ELT-2 binding category against the total dataset.  
+
+```{r}
+bound_only_percent_bound_per_ELT2_cluster <-
+  bound_only_expressionSet_per_BindingCluster %>% group_by(ELT2_cluster) %>% summarise(percent = sum(present) /
+                                                                              nrow(dynamic_counts_matrix_scaled))
+```
+
+Next calculate the the 95% Confidence Interval with the Bionomial Test.
+
+```{r}
+bound_only_expressionSet_per_BindingCluster %>% group_by(set, ELT2_cluster) %>% summarise(percent = present /
+                                                                                 (present + absent))
+
+```
+ 
+Calculate the binomial pvalue and confidence intervals.  
+
+```{r}
+# Add a column for the background percentage of ELT2 binding clusters per the whole expression dataset
+bound_only_expression_binding_stats <-
+  bound_only_expressionSet_per_BindingCluster %>% group_by(ELT2_cluster) %>% mutate(background_percent = sum(present) /
+                                                                                      (sum(present) + sum(absent)))
+
+# Use binom.test to calculate pvalue and confidence intervales for the percentage of ELT2 binding clusters per expression clusters
+bound_only_expression_binding_stats <-
+  bound_only_expression_binding_stats %>%
+  group_by(ELT2_cluster, set) %>%
+  mutate(
+    pval = binom.test(
+      x = c(present, absent),
+      n = present + absent,
+      p = background_percent,
+      alternative = "two.sided"
+    )$p.value,
+    conf.upper = binom.test(
+      x = c(present, absent),
+      n = present + absent,
+      p = background_percent,
+      alternative = "two.sided"
+    )$conf.int[2],
+    conf.lower = binom.test(
+      x = c(present, absent),
+      n = present + absent,
+      p = background_percent,
+      alternative = "two.sided"
+    )$conf.int[1]
+  )
+
+bound_only_expression_binding_stats$set <-
+  factor(bound_only_expression_binding_stats$set,
+         levels = c("SET4", "SET3", "SET2", "SET1"))
+
+bound_only_expression_binding_stats %>% head()
+
+```
+
+
+
+```{r}
+ggplot(bound_only_expression_binding_stats,
+       aes(x = set,
+           y = percent, fill = ELT2_cluster)) +
+  geom_bar(stat = "identity") +
+  scale_y_continuous(limits = c(0, 1.5)) +
+  theme_classic() +
+  geom_hline(
+    data = bound_only_percent_bound_per_ELT2_cluster,
+    color = "red",
+    linetype = "dashed",
+    aes(yintercept = percent)
+  ) +
+  geom_errorbar(
+    ymax = bound_only_expression_binding_stats$conf.upper,
+    ymin = bound_only_expression_binding_stats$conf.lower,
+    width = 0.1
+  ) +
+  coord_flip() +
+  facet_grid(. ~ ELT2_cluster) +
+  scale_fill_manual(values = as.character(cluster_colors$val))
+
+# ggsave(filename = "./03_plots/11_Bound_Only_Percent_of_ELT2bindClust_per_ExpressionClust_200615.pdf",
+#        height = 5,
+#        width = 8)
+```
 
 # Make a TF subset heatmap
 
@@ -1156,9 +1235,13 @@ tf_heatmap <- Heatmap(
   clustering_method_rows = "complete",
   show_row_names = TRUE,
   show_column_names = TRUE,
-  column_title = "Differential Expression of All Transcription Factors"
+  column_title = "Differential Expression of\nAll Transcription Factors"
 )
 tf_heatmap
+
+# pdf("./03_plots/12_Differential_Expression_of_All_TFs.pdf", height = 20, width = 4)
+# tf_heatmap
+# dev.off()
 ```
 
 Add row annotation to indicate ELT-2 binding in L1 stage
@@ -1183,43 +1266,94 @@ tf_heatmap_L1bound <-
                   "bound" = "green", "not.bound" = "black"
                 )))
 tf_heatmap_L1bound
+
+# pdf("./03_plots/13a_Differential_Expression_of_All_TFs_L1elt2bound_anno.pdf", height = 5, width = 5.5)
+# tf_heatmap_L1bound
+# dev.off()
 ```
 
+Add row annotation of intestine expression from Spencer intestine RNA data
+
 ```{r}
-RNA_heatmap(dynamic_counts_matrix_scaled_TFs_names,
+tf_spencer_rna_anno <- data.frame(
+  spencerLE = ifelse(
+    test = rownames(dynamic_counts_matrix_scaled_TFs) %in% spencer_LE_subset$spencer_LE_ID,
+    yes = "enriched",
+    no = "depleted"
+  ),
+  spencerL2 = ifelse(
+    test = rownames(dynamic_counts_matrix_scaled_TFs) %in% spencer_L2_subset$spencer_L2_ID,
+    yes = "enriched",
+    no = "depleted"
+  )
+)
+
+tf_heatmap_L1bound_spencerRNA <- tf_heatmap_L1bound + rowAnnotation(
+    LE.intestine = tf_spencer_rna_anno$spencerLE,
+    col = list(LE.intestine = c(
+      "enriched" = "blue", "depleted" = "white"
+    )),
+    border = TRUE
+  ) +
+  rowAnnotation(
+    L2.intestine = tf_spencer_rna_anno$spencerL2,
+    col = list(L2.intestine = c(
+      "enriched" = "blue", "depleted" = "white"
+    )),
+    border = TRUE
+  )
+
+tf_heatmap_L1bound_spencerRNA
+
+# pdf("./03_plots/13b_Differential_Expression_of_All_TFs_L1elt2bound_anno.pdf", height = 5, width = 5.5)
+# tf_heatmap_L1bound_spencerRNA
+# dev.off()
+```
+
+Split heatmap based on L1 binding
+
+```{r}
+tf_heatmap_L1bound_split <- RNA_heatmap(dynamic_counts_matrix_scaled_TFs_names,
             split = tf_bound_anno$elt2_detected_in_L1) +
   rowAnnotation(L1_bound = tf_bound_anno$elt2_detected_in_L1,
                 col = list(L1_bound = c(
                   "bound" = "green", "not.bound" = "black"
                 )))
+tf_heatmap_L1bound_split
+
+# pdf("./03_plots/14a_Differential_Expression_of_All_TFs_L1elt2bound_split.pdf", height = 5, width = 5.5)
+# tf_heatmap_L1bound_split
+# dev.off()
 ```
 
 
-Add row annotation of intestine expression
+Add row annotation of intestine expression from Spencer intestine RNA data to split heatmap
 
 ```{r}
-tf_lfc <-
-  L1_gut_lfc %>% filter(WBGeneID %in% rownames(dynamic_counts_matrix_scaled_TFs)) %>% select(log2FoldChange)
 
-tf_heatmap_L1bound +
-  rowAnnotation(log2FC = tf_lfc$log2FoldChange,
-                col = list(log2FC = colorRamp2(c(-10, 0, 10), c(
-                  "blue", "white", "red"
-                ))))
+
+tf_heatmap_L1bound_split_spencerRNA <- tf_heatmap_L1bound_split +
+  rowAnnotation(
+    LE.intestine = tf_spencer_rna_anno$spencerLE,
+    col = list(LE.intestine = c(
+      "enriched" = "blue", "depleted" = "white"
+    )),
+    border = TRUE
+  ) +
+  rowAnnotation(
+    L2.intestine = tf_spencer_rna_anno$spencerL2,
+    col = list(L2.intestine = c(
+      "enriched" = "blue", "depleted" = "white"
+    )),
+    border = TRUE
+  )
+
+tf_heatmap_L1bound_split_spencerRNA
+
+# pdf("./03_plots/14b_Differential_Expression_of_All_TFs_L1elt2bound_split_spencerRNA.pdf", height = 5, width = 5.5)
+# tf_heatmap_L1bound_split_spencerRNA
+# dev.off()
 ```
-
-```{r}
-RNA_heatmap(dynamic_counts_matrix_scaled_TFs_names,
-            split = tf_bound_anno$elt2_detected_in_L1) +
-  rowAnnotation(L1_bound = tf_bound_anno$elt2_detected_in_L1,
-                col = list(L1_bound = c(
-                  "bound" = "green", "not.bound" = "black"
-                ))) +  rowAnnotation(log2FC = tf_lfc$log2FoldChange,
-                                     col = list(log2FC = colorRamp2(c(-10, 0, 10), c(
-                                       "blue", "white", "red"
-                                     ))))
-```
-
 
 Zoom in on only bound TFs
 
@@ -1231,11 +1365,6 @@ dynamic_counts_matrix_scaled_TFs_bound <-
 dynamic_counts_matrix_scaled_TFs_bound_names <-
   id2name(dynamic_counts_matrix_scaled_TFs_bound)
 
-bound_tf_lfc <-
-  L1_gut_lfc %>% filter(WBGeneID %in% rownames(dynamic_counts_matrix_scaled_TFs_bound)) %>% select(log2FoldChange)
-
-head(bound_tf_lfc)
-
 HAboundTF <- Heatmap(
   dynamic_counts_matrix_scaled_TFs_bound_names,
   col = colorRampPalette(c("cyan", "black", "yellow"))(1000),
@@ -1245,182 +1374,58 @@ HAboundTF <- Heatmap(
   show_row_names = TRUE,
   row_names_side = "left",
   show_column_names = TRUE,
-  column_title = "Differential Expression of\nELT-2 bound Transcription Factors"
+  column_title = "Differential Expression of\nELT-2 Bound Transcription Factors"
 )
 
+HAboundTF
+
+# pdf("./03_plots/15a_Differential_Expression_Bound_TFs_only.pdf", height = 5, width = 5.5)
+# HAboundTF
+# dev.off()
+
 ```
+
+```{r}
+tf_bound_spencer_rna_anno <- data.frame(
+  spencerLE = ifelse(
+    test = rownames(dynamic_counts_matrix_scaled_TFs_bound) %in% spencer_LE_subset$spencer_LE_ID,
+    yes = "enriched",
+    no = "depleted"
+  ),
+  spencerL2 = ifelse(
+    test = rownames(dynamic_counts_matrix_scaled_TFs_bound) %in% spencer_L2_subset$spencer_L2_ID,
+    yes = "enriched",
+    no = "depleted"
+  )
+)
+
+HAboundTF_spencerRNA <- HAboundTF + rowAnnotation(
+    LE.intestine = tf_spencer_rna_anno$spencerLE,
+    col = list(LE.intestine = c(
+      "enriched" = "blue", "depleted" = "white"
+    )),
+    border = TRUE
+  ) +
+  rowAnnotation(
+    L2.intestine = tf_spencer_rna_anno$spencerL2,
+    col = list(L2.intestine = c(
+      "enriched" = "blue", "depleted" = "white"
+    )),
+    border = TRUE
+  )
+
+HAboundTF_spencerRNA
+
+# pdf("./03_plots/15b_Differential_Expression_Bound_TFs_only_spencerRNA.pdf", height = 5, width = 5.5)
+# HAboundTF_spencerRNA
+# dev.off()
+```
+
 
 This plot suggests that transcription factors bound by ELT-2 are typically upregulated in the absence of ELT-2. 
 
-Additionally, TFs that are expressed in the L1 intestine are upregulated in absence of ELT-2 alone, but downregulated in the absence of both ELT-2 and ELT-7.  
+TFs to follow up: pqm-1 (intestine), zip-10, odd-1 (repressed by elt-2 alone, normally gut expressed). nhr-58 (vulva), zip-2 (neuron), cebp-1 (neuron), gla-3 (germline), zip-11
 
-Futhermore, TFs that are not expressed in the L1 intestine are upregulated only in the absence of both ELT-2 and ELT-7.  
-
-TFs to follow up: pqm-1, zip-10, odd-1 (repressed by elt-2 alone, normally gut expressed). nhr-58 (vulva), zip-2 (neuron), cebp-1 (neuron), gla-3 (germline), zip-11
-
-
-
-# Conclusions
-
-Figure 1A
-
-```{r}
-
-```
-
-
-
-
-# old code below
-
-## Transcription factor subset plots
-
-<!-- Load in wTF3.0 list -->
-
-<!-- ```{r, out.width= '\\textwidth', fig.height= 4.5, fig.align='center'} -->
-<!-- wTF3.0 <- -->
-<!--   read.csv("./01_input/TF3-0_namesonly.txt", -->
-<!--            sep = "\t", -->
-<!--            header = TRUE) %>% select(WBGeneID) -->
-
-<!-- dynamic_counts_matrix_TFs <- -->
-<!--   matrix_select(dynamic_counts_matrix, wTF3.0$WBGeneID) -->
-<!-- dynamic_counts_matrix_TFs_bound <- -->
-<!--   matrix_select(dynamic_counts_matrix_scaled_TFs, -->
-<!--                 elt2_detected_in_L1$WBGeneID) -->
-
-<!-- dynamic_counts_matrix_TFs_bound_sub <- -->
-<!--   subset( -->
-<!--     dynamic_counts_matrix_TFs_bound, -->
-<!--     select = c( -->
-<!--       "wt_sorted_1", -->
-<!--       "wt_sorted_2", -->
-<!--       "wt_sorted_3", -->
-<!--       "wt_sorted_4", -->
-<!--       "elt2D_sorted_1", -->
-<!--       "elt2D_sorted_2", -->
-<!--       "elt2D_sorted_3", -->
-<!--       "elt2D_sorted_4" -->
-<!--     ) -->
-<!--   ) -->
-
-<!-- dynamic_counts_matrix_TFs_bound_sub_scale <- -->
-<!--   t(apply(unlist(dynamic_counts_matrix_TFs_bound_sub), 1, scale)) -->
-
-<!-- # varselect <- rowVars(colsub) >= 0.5 -->
-<!-- # colsub <- colsub[varselect, ] -->
-
-<!-- dynamic_counts_matrix_TFs_bound_sub_scale_names <- -->
-<!--   id2name(dynamic_counts_matrix_TFs_bound_sub_scale) -->
-
-<!-- bound_TF_heatmap <- -->
-<!--   Heatmap( -->
-<!--     dynamic_counts_matrix_TFs_bound_sub_scale_names, -->
-<!--     col = colorRampPalette(c("cyan", "black", "yellow"))(1000), -->
-<!--     cluster_columns = FALSE, -->
-<!--     #clustering_distance_rows = "spearman", -->
-<!--     row_dend_reorder = TRUE, -->
-<!--     clustering_method_rows = "complete", -->
-<!--     show_row_names = TRUE, -->
-<!--     show_column_names = TRUE, -->
-<!--     row_names_gp = gpar(fontsize = 10), -->
-<!--     column_names_gp = gpar(cex = 0.4), -->
-<!--     heatmap_legend_param = list(color_bar = "continuous"), -->
-<!--     #split = 2, -->
-<!--     width = unit(3, "in"), -->
-<!--     height = unit(4, "in") -->
-<!--   ) -->
-<!-- bound_TF_heatmap -->
-
-<!-- pdf("./03_plots/200428_TF_only_L1elt2bound", -->
-<!--     height = 5, -->
-<!--     width = 5) -->
-<!-- bound_TF_heatmap -->
-<!-- dev.off() -->
-<!-- ``` -->
-
-<!-- Add intestine expressed annotation.   -->
-
-<!-- ```{r} -->
-<!-- bound_TF_rna_anno <- data.frame( -->
-<!--   spencerLE = ifelse( -->
-<!--     test = rownames(dynamic_counts_matrix_TFs_bound_sub_scale) %in% spencer_LE_subset$spencer_LE_ID, -->
-<!--     yes = "enriched", -->
-<!--     no = "depleted" -->
-<!--   ), -->
-<!--   spencerL2 = ifelse( -->
-<!--     test = rownames(dynamic_counts_matrix_TFs_bound_sub_scale) %in% spencer_L2_subset$spencer_L2_ID, -->
-<!--     yes = "enriched", -->
-<!--     no = "depleted" -->
-<!--   ) -->
-<!-- )  -->
-
-<!-- bound_TF_heatmap + -->
-<!--     rowAnnotation(LE.intestine = bound_TF_rna_anno$spencerLE, col = list(LE.intestine = c("enriched" = "blue", "depleted" = "white")), border = TRUE) + -->
-<!--   rowAnnotation(L2.intestine = bound_TF_rna_anno$spencerL2, col = list(L2.intestine = c("enriched" = "blue", "depleted" = "white")), border = TRUE) -->
-<!-- ``` -->
-
-
-
-<!-- ```{r, out.width= '\\textwidth', fig.height= 3.5, fig.align='center'} -->
-<!-- dynamic_counts_matrix_TFs <- matrix_select(dynamic_counts_matrix, wTF3.0$WBGeneID) -->
-<!-- dynamic_counts_matrix_TFs_sub <- subset(dynamic_counts_matrix_TFs, select = c("wt_sorted_1", "wt_sorted_2", "wt_sorted_3", "wt_sorted_4", "elt2D_sorted_1", "elt2D_sorted_2", "elt2D_sorted_3", "elt2D_sorted_4")) -->
-<!-- dynamic_counts_matrix_TFs_sub_scale <- t(apply(unlist(dynamic_counts_matrix_TFs_sub), 1, scale))  -->
-<!-- dynamic_counts_matrix_TFs_sub_scale_names <- id2name(dynamic_counts_matrix_TFs_sub_scale) -->
-<!-- Ha_TF <- Heatmap(dynamic_counts_matrix_TFs_sub_scale_names,  -->
-<!--           col = colorRampPalette(c("cyan","black","yellow"))(1000),     -->
-<!--           cluster_columns = FALSE, -->
-<!--           #clustering_distance_rows = "spearman", -->
-<!--           #row_dend_reorder = TRUE, -->
-<!--           clustering_method_rows = "complete",  -->
-<!--           show_row_names = TRUE, -->
-<!--           show_column_names = TRUE, -->
-<!--           row_names_gp = gpar(cex = 0.4), -->
-<!--           column_names_gp = gpar(cex = 0.4), -->
-<!--           heatmap_legend_param = list(color_bar = "continuous"), -->
-<!--           #split = 2, -->
-<!--            width = unit(2, "in"),  -->
-<!--           # height = unit(3, "in"), -->
-<!--           split = 2) -->
-<!-- Ha_TF -->
-
-<!-- # svg("./killme.svg", width = 8, height = 8) -->
-<!-- # Ha_TF -->
-<!-- # dev.off() -->
-<!-- ``` -->
-
-<!-- ```{r} -->
-<!-- TF_anno <- data.frame(elt2_detected_in_L1 = ifelse(test = rownames(dynamic_counts_matrix_TFs_sub_scale) %in% elt2_detected_in_L1$WBGeneID, yes = "bound", no = "not.bound"))  -->
-
-<!-- Ha_TF + rowAnnotation(L1bound = TF_anno$elt2_detected_in_L1, -->
-<!--                    col = list(L1bound = c("bound" = "green", "not.bound" = "black"))) -->
-
-<!-- # pdf("./tf_heatmap.pdf", height = 8, width = 8) -->
-<!-- # Ha_TF + rowAnnotation(L1bound = TF_anno$elt2_detected_in_L1, -->
-<!-- #                    col = list(L1bound = c("bound" = "green", "not.bound" = "black"))) -->
-<!-- # dev.off() -->
-<!-- ``` -->
-
-<!-- Add intestine expression row annotation.   -->
-
-<!-- ```{r} -->
-<!-- TF_rna_anno <- data.frame( -->
-<!--   spencerLE = ifelse(test = rownames(dynamic_counts_matrix_TFs_sub_scale) %in% spencer_LE_subset$spencer_LE_ID, yes = "enriched", no = "depleted"), -->
-<!--   spencerL2 = ifelse(test = rownames(dynamic_counts_matrix_TFs_sub_scale) %in% spencer_L2_subset$spencer_L2_ID, yes = "enriched", no = "depleted") -->
-<!--     )  -->
-
-<!-- Ha_TF_spencer <- Ha_TF + rowAnnotation(L1bound = TF_anno$elt2_detected_in_L1, -->
-<!--                    col = list(L1bound = c("bound" = "green", "not.bound" = "black"))) + -->
-<!--     rowAnnotation(LE.intestine = TF_rna_anno$spencerLE, col = list(LE.intestine = c("enriched" = "blue", "depleted" = "white")), border = TRUE) + -->
-<!--   rowAnnotation(L2.intestine = TF_rna_anno$spencerL2, col = list(L2.intestine = c("enriched" = "blue", "depleted" = "white")), border = TRUE) -->
-
-<!-- # pdf("./03_plots/200428_DE_TFs_elt2chip_intestineExpression", height = 8, width = 8) -->
-<!-- # Ha_TF_spencer -->
-<!-- # dev.off() -->
-
-<!-- ``` -->
-
-## Results and interpretation
 
 ## Session Info
 

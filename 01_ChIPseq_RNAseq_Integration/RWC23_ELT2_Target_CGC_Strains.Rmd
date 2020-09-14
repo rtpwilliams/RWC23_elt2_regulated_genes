@@ -1,0 +1,133 @@
+---
+title: "RWC23_ELT2_Target_CGC_Strains"
+author: "RTPW"
+date: "9/13/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+For this analysis to work the file `RWC23_ELT2_Regulated_Genes.Rmd` must be run
+
+# Fish out the genes that change the most and look for CGC stains
+
+MOVE THIS TO A SEPARATE ANALYSIS
+
+```{r}
+cgc_strains <- readLines("./01_input/200608_cgc-strains.txt")
+
+cgc_strains <- str_trim(cgc_strains)
+head(cgc_strains, n = 40)
+
+total_strains <- sum(str_count(cgc_strains, pattern = "-----------------------------------------------------------------------------"))
+
+counter = 1
+cgc_strains_df <- data.frame(stringsAsFactors = FALSE)
+for (i in 1:(total_strains)){
+  to_append <- data.frame(string = str_c(c(cgc_strains[(counter+1):(counter+8)]), collapse = "\t"), stringsAsFactors = FALSE)
+  cgc_strains_df <- bind_rows(cgc_strains_df, to_append)
+  counter <- counter + 9
+}
+
+# cgc_strains_list <- str_split(cgc_strains_df$string, pattern = "\t")
+# 
+# str(cgc_strains_list)
+# cgc_strains_df$string[str_detect(cgc_strains_df$string, pattern = "elt-2")]
+```
+
+Set up quick and direty way of cross referencing the CGC list to ELT-2/ELT-7 differential expression list. Prioritize genes with high variance between the different elt-2/elt-7 deletion genotypes. Spot check the strains on CGC to ensure they are protein::GFP worms and nothing extra. Also visualize the gene on the genome browser to see RNA changes.
+
+```{r}
+variance_per_gene <-  as.data.frame(matrix_select(dynamic_counts_matrix, l1_bound_list$WBGeneID)) %>% rownames_to_column(var = "WBGeneID") %>% 
+    merge(bound_only_sets, by = "WBGeneID") %>% 
+    pivot_longer(wt_sorted_1:elt2Delt7D_sorted_3, names_to = "sample", values_to = "rlogCount") %>%
+    group_by(WBGeneID, set) %>%
+    summarise(variance = var(rlogCount))
+
+paramart <- useMart("parasite_mart", dataset = "wbps_gene", host = "https://parasite.wormbase.org", port = 443)
+variance_per_gene <- getBM(
+  mart = paramart,
+  filter = c("wbps_gene_id"),
+  value = variance_per_gene$WBGeneID,
+  attributes = c('wbps_gene_id', 'external_gene_id')
+) %>% inner_join(variance_per_gene, by = c("wbps_gene_id" = "WBGeneID"))
+
+variance_per_gene %>% mutate(cgc_count = 
+                               sum(str_count(cgc_strains_df$string, pattern = "elt-2"))
+                             ) %>% arrange(desc(cgc_count))
+
+cgc_count_column <- c()
+for (i in variance_per_gene$external_gene_id){
+  cgc_count_column <- append(cgc_count_column, sum(str_count(cgc_strains_df$string, pattern = paste(i, "(?![:digit:])", sep = "")
+                                                             )))
+}
+
+variance_per_gene <- variance_per_gene %>% mutate(cgc_count = cgc_count_column)
+```
+
+SET1 genes are up in wildtype but down in elt-2 (-) and do not change with elt-7 (-) single or double. In other words, activated alone by ELT-2
+
+```{r}
+variance_per_gene %>% filter(set == "SET1") %>% arrange(desc(variance))
+```
+
+SET1 strains to order: strain CL2122 (mtl-2)
+
+SET2 genes go up only in elt-2 (-)
+
+```{r}
+variance_per_gene %>% filter(set == "SET2") %>% arrange(desc(variance)) %>% filter(cgc_count > 1)
+```
+
+SET2 genes to order: OP201 (pqm-1)
+
+SET3 genes go up in elt-2 (-) and go up a little higher in elt-2 (-);elt-7 (-)
+
+```{r}
+variance_per_gene %>% filter(set == "SET3") %>% arrange(desc(variance))
+```
+
+SET3 order: OP750 (gla-3)
+
+SET4 genes only go down in elt-2 (-);elt-7 (-)
+
+```{r}
+variance_per_gene %>% filter(set == "SET4") %>% arrange(desc(variance))
+```
+
+SET4 cgc strain: OP509 (ets-4).  
+
+Make a plot with these genes annotated.  
+
+```{r}
+
+genes_to_test <- variance_per_gene %>% filter(external_gene_id %in% c("ets-4", "gla-3", "mtl-2", "pqm-1")) %>% select(wbps_gene_id, external_gene_id)
+
+Ha_bound_only_test_gene <- Ha_bound_only +
+  rowAnnotation(foo = anno_mark(
+    at = c(
+      which(
+        rownames(dynamic_counts_matrix_scaled_bound_only) == genes_to_test$wbps_gene_id[1]
+      ),
+      which(
+        rownames(dynamic_counts_matrix_scaled_bound_only) == genes_to_test$wbps_gene_id[2]
+      ),
+      which(
+        rownames(dynamic_counts_matrix_scaled_bound_only) == genes_to_test$wbps_gene_id[3]
+      ),
+      which(
+        rownames(dynamic_counts_matrix_scaled_bound_only) == genes_to_test$wbps_gene_id[4]
+      )
+    ),
+    labels = genes_to_test$external_gene_id
+  ))
+
+Ha_bound_only_test_gene
+
+pdf(file = "./03_plots/200729_ELT2_DE_Genes_ELT2bound_Test_Genes_Annotated.pdf", width = 5, height = 5)
+Ha_bound_only_test_gene
+dev.off()
+```
+
