@@ -7,6 +7,16 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+Note: Ensure BioConductor is version 3.10 or above
+
+Install libraries
+
+```{r}
+# fill this in
+```
+
+Note: you must load `biomaRt` before loading `tidyverse`
+
 Load libraries
 ```{r}
 library(biomaRt)
@@ -46,18 +56,18 @@ time_resolved_rna <- getBM(
 time_resolved_rna <- time_resolved_rna %>% drop_na(wbps_gene_id)
 ```
 
+# Load in public intestine expression datasets
+
+Initalize an empty dataframe.
 
 ```{r}
 intestine_rna <- data.frame(WBGeneID = time_resolved_rna$wbps_gene_id, Sequence.name = time_resolved_rna$wormbase_gseq, Public_name = time_resolved_rna$wikigene_name)
-
 ```
 
-Make Seprate "metadata" dataframe to store descriptive information
+Initalize a seprate empty "metadata" dataframe to store descriptive information
 
 ```{r}
-
 RWC23_Metadata <- data.frame(column_ID = "", column_detail = "", source_DOI = "", source_detail = "", seq_method = "")
-
 ```
 
 # A Transcriptional Lineage of the Early C . elegans Embryo.
@@ -66,6 +76,7 @@ RWC23_Metadata <- data.frame(column_ID = "", column_detail = "", source_DOI = ""
 ```{r}
 # Transcripts from embryonic 2Ep intestine from Sophie's single cell RNA-seq paper. See `intestine_tfs.Rmd`
 tintori_2Ep <- read.csv("./02_Data/7_Tintori_et_al_2016_Embryo_scRNA-seq/16cell_vs_Ep_p1_00.csv", header = FALSE, stringsAsFactors = FALSE)
+tintori_columns <- c("gene", "p.value", "log.CPM", "log.FC")
 colnames(tintori_2Ep) <- str_c("tintori_2Ep_", tintori_columns)
 
 intestine_rna <- intestine_rna %>% left_join(tintori_2Ep, by = c("Sequence.name" = "tintori_2Ep_gene"))
@@ -293,82 +304,88 @@ wTF3.0 <-
 time_resolved_rna_intestine_df <- time_resolved_rna %>%
   remove_rownames() %>%
   arrange(wbps_gene_id) %>%
-  filter(wbps_gene_id %in% intestine_gene_list$WBGeneID)
+  filter(wbps_gene_id %in% intestine_gene_list$WBGeneID) %>%
+  select(
+    -(emb_4cell:emb_471min),
+    -DE,
+    -D,
+    -DX,
+    -Soma,
+    -Male,
+    -AdultSPE9,
+    -gonad,
+    -LENGTH
+  )
+head(time_resolved_rna_intestine_df)
+```
 
-time_resolved_rna_matrix_intestine <- time_resolved_rna %>%
-  select(-wormbase_gseq, -wikigene_name, -LENGTH) %>%
+
+```{r}
+time_resolved_rna_intestine_matrix <- time_resolved_rna_intestine_df %>%
+  select(-wormbase_gseq,-wikigene_name) %>%
   remove_rownames() %>%
   arrange(wbps_gene_id) %>%
-  filter(wbps_gene_id %in% intestine_gene_list$WBGeneID) %>%
   column_to_rownames(var = "wbps_gene_id") %>%
   as.matrix()
+head(time_resolved_rna_matrix_intestine)
+```
+
+Perform row normalization
+
+```{r}
+time_resolved_rna_intestine_matrix_scaled <- t(apply(unlist(time_resolved_rna_intestine_matrix), 1, scale))
+colnames(time_resolved_rna_intestine_matrix_scaled) <- colnames(time_resolved_rna_intestine_matrix)
+```
+
+Store index of relavent genes for row annotations. Use custom function 
+
+```{r}
+gene_names <- c("end-1", "elt-2", "elt-7", "elt-4", "pqm-1", "mtl-2", "ets-4")
+GOI_df <- GOI_annotate_heatmap(gene_names, time_resolved_rna_intestine_df$wikigene_name)
+GOI_df
 ```
 
 
 ```{r}
-time_resolved_rna_matrix_intestine_scaled <- t(apply(unlist(time_resolved_rna_matrix_intestine), 1, scale))
-colnames(time_resolved_rna_matrix_intestine_scaled) <- colnames(time_resolved_rna_matrix_intestine)
-```
-
-Store index of relavent genes for row annotations
-
-```{r}
-gene_index <- c(
-  which(time_resolved_rna_intestine_df$wikigene_name == "end-1"),
-  which(time_resolved_rna_intestine_df$wikigene_name == "elt-2"),
-  which(time_resolved_rna_intestine_df$wikigene_name == "elt-7"),
-  which(time_resolved_rna_intestine_df$wikigene_name == "elt-4"),
-  which(time_resolved_rna_intestine_df$wikigene_name == "pqm-1")
-)
-gene_index_names <- c("end-1", "elt-2", "elt-7", "elt-4", "pqm-1")
-
-time_resolved_rna_intestine_df %>% filter(wikigene_name %in% gene_index_names)
+time_resolved_rna_intestine_df %>% filter(wikigene_name %in% GOI_df$name)
 ```
 
 
 ```{r}
-Boeck_intestine_RNA <- Heatmap(time_resolved_rna_matrix_intestine_scaled,
+Boeck_intestine_RNA <- Heatmap(time_resolved_rna_intestine_matrix_scaled,
         cluster_columns = FALSE,
         show_row_names = FALSE,
         row_km = 5) +
-  rowAnnotation(foo = anno_mark(gene_index, labels = gene_index_names))
+  rowAnnotation(foo = anno_mark(GOI_df$index, labels = GOI_df$name))
 Boeck_intestine_RNA
-# pdf(file = "./03_plots/200720_Boeck_RNA_Intestine.pdf", width = 7, height = 7)
+# pdf(file = "./03_plots/200915_Boeck_RNA_Intestine.pdf", width = 7, height = 7)
 # Boeck_intestine_RNA
 # dev.off()
 ```
 
-Filter heatmap for only transcription factors
+Filter heatmap for only transcription factors. This is very ugly, fix later.
 
 ```{r}
-time_resolved_rna_matrix_intestine_scaled_TFONLY <-
-  matrix_select(time_resolved_rna_matrix_intestine_scaled, wTF3.0$WBGeneID)
+time_resolved_rna_intestine_matrix_scaled_TFONLY <-
+  matrix_select(time_resolved_rna_intestine_matrix_scaled, wTF3.0$WBGeneID)
 
+tf_GOI_df <- GOI_df %>% left_join(time_resolved_rna_intestine_df, by = c("name" = "wikigene_name")) %>% select(name:wbps_gene_id, -index) %>% filter(wbps_gene_id %in% wTF3.0$WBGeneID) 
+tf_GOI_df
+tf_GOI_df<-GOI_annotate_heatmap(tf_GOI_df$wbps_gene_id, rownames(time_resolved_rna_intestine_matrix_scaled_TFONLY)) %>% full_join(tf_GOI_df, by = c("name" = "wbps_gene_id"))
+
+```
+
+
+```{r}
 Heatmap(
-  time_resolved_rna_matrix_intestine_scaled_TFONLY,
+  time_resolved_rna_intestine_matrix_scaled_TFONLY,
   cluster_columns = FALSE,
   show_row_names = FALSE,
-  row_km = 6
+  row_km = 5
 ) +
   rowAnnotation(foo = anno_mark(
-    at = c(
-      which(
-        rownames(time_resolved_rna_matrix_intestine_scaled_TFONLY) == "WBGene00001250"
-      ),
-      which(
-        rownames(time_resolved_rna_matrix_intestine_scaled_TFONLY) == "WBGene00001252"
-      ),
-      which(
-        rownames(time_resolved_rna_matrix_intestine_scaled_TFONLY) == "WBGene00001310"
-      ),
-      which(
-        rownames(time_resolved_rna_matrix_intestine_scaled_TFONLY) == "WBGene00004096"
-      ),
-      which(
-        rownames(time_resolved_rna_matrix_intestine_scaled_TFONLY) == "WBGene00015981"
-      )
-    ),
-    labels = c("elt-2", "elt-4", "end-1", "pqm-1", "elt-7")
+    at = tf_GOI_df$index,
+    labels = tf_GOI_df$name.y
   ))
 ```
 
@@ -377,68 +394,106 @@ Heatmap(
 
 ```{r}
 ELT2_GRange <- readRDS(file = "./01_input/200719_annotatedPeaks.rds")
-
 chip_df <- mcols(ELT2_GRange)
-
-
 head(chip_df)
 ```
 
 # Subset ELT-2 ChIP with literature Intestine Expression
 
-```{r}
-chip_rna_df <-
-  as.data.frame(chip_df) %>% remove_rownames() %>% 
-  select(name, k4labels, feature)  %>% 
-  right_join(time_resolved_rna, by = c("feature" = "wbps_gene_id")) %>% 
-  replace_na(list("k4labels" = "Not_Bound", "name" = "Not_Bound"))
+Do this earlier in the code to have k4labels stored in the time_resolved_rna dataframe and subsequent subsetting
 
-chip_rna_df$k4labels <-
-  factor(
-    chip_rna_df$k4labels,
-    levels = c(
-      "LE-specific",
-      "Post-embryonic",
-      "Increasing",
-      "L3-high",
-      "Not-changing or not IDR-passing",
-      "Not.Bound"
-    ),
-    labels = c(
-      "Embryo_Specific",
-      "Larval",
-      "Increasing",
-      "L3_High",
-      "Not_Changing",
-      "Not_Bound"
-    )
-  )
+```{r}
+ chip_rna_df <-
+   as.data.frame(chip_df) %>% remove_rownames() %>%
+   select(name, k4labels, feature)  %>%
+   right_join(time_resolved_rna_intestine_df, by = c("feature" = "wbps_gene_id")) %>%
+   replace_na(list("k4labels" = "Not_Bound", "name" = "Not_Bound"))
+
+ chip_rna_df$k4labels <-
+   factor(
+     chip_rna_df$k4labels,
+     levels = c(
+       "LE-specific",
+       "Post-embryonic",
+       "Increasing",
+       "L3-high",
+       "Not-changing or not IDR-passing",
+       "Not_Bound"
+     ),
+     labels = c(
+       "Embryo_Specific",
+       "Larval",
+       "Increasing",
+       "L3_High",
+       "Not_Changing",
+       "Not_Bound"
+     )
+   )
 ```
 
 # Subset heatmap based on ELT-2 binding pattern
 
+
+
+
 ```{r}
-gut_chip_rna_df <- chip_rna_df %>% semi_join(intestine_gene_list, c("feature" = "WBGeneID")) 
-gut_chip_rna_matrix <- gut_chip_rna_df %>% select(emb_4cell:gonad) %>% as.matrix() 
-BoeckRNA_ELT2_chip <- Heatmap(row_scale(gut_chip_rna_matrix),
+chip_rna_matrix <- chip_rna_df %>% select(emb_510min:YA) %>% as.matrix() 
+rownames(chip_rna_matrix) <- chip_rna_df$wikigene_name
+chip_rna_matrix_scaled <- row_scale(chip_rna_matrix)
+head(chip_rna_matrix_scaled)
+```
+```{r}
+which(rownames(chip_rna_matrix_scaled) == "mtl-2")
+```
+
+```{r}
+for (name in gene_names){
+  index <- which(rownames(chip_rna_matrix_scaled) == name)
+  for (i in 1:length(index)){
+    print(c(name, index[i]))
+  }
+}
+```
+
+
+
+```{r}
+chip_GOI_df <- data.frame(name = NULL, index = NULL)
+for (name in gene_names){
+  index <- which(rownames(chip_rna_matrix_scaled) == name)
+  for (i in 1:length(index)){
+    toappend <- data.frame(name = name, index = index[i])
+    chip_GOI_df <- bind_rows(chip_GOI_df, toappend)
+  }
+}
+chip_GOI_df
+```
+
+```{r}
+BoeckRNA_ELT2_chip <- Heatmap(chip_rna_matrix_scaled,
         name = "Boeck Time Resolved RNA",
-        row_split = gut_chip_rna_df$k4labels,
+        row_split = chip_rna_df$k4labels,
         row_title = NULL,
         cluster_columns = FALSE) +
-  rowAnnotation(ELT2_peak = gut_chip_rna_df$k4labels, 
+  rowAnnotation(ELT2_peak = chip_rna_df$k4labels, 
                 col = list(ELT2_peak = c(
       "Embryo_Specific" = "#7570B3",
       "Larval" = "#1B9E77",
       "Increasing" = "#E7298A",
       "L3_High" = "#D95F02",
       "Not_Changing" = "#505050",
-      "Not_Bound" = "black"
+      "Not_Bound" = "white"
     )),
     border = TRUE
+  ) +
+  rowAnnotation(foo = anno_mark(
+    at = chip_GOI_df$index,
+    labels = chip_GOI_df$name
+  )
   )
 BoeckRNA_ELT2_chip
 
-# pdf(file = "./03_plots/200720_Boeck_RNA_ELT2ChIP_Patterns.pdf", width = 7, height = 7)
+# pdf(file = "./03_plots/200915_Boeck_RNA_ELT2ChIP_Patterns.pdf", width = 7, height = 7)
 # BoeckRNA_ELT2_chip
 # dev.off()
 ```

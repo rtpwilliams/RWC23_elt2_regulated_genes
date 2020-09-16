@@ -297,5 +297,18 @@ make_cluster_binary_annotation <- function(input_matrix){
 row_scale <- function(mat){
   scale_mat <-t(apply(unlist(mat), 1, scale))
   colnames(scale_mat) <- colnames(mat)
+  rownames(scale_mat) <- rownames(mat)
   scale_mat
+}
+
+# GOI_annotate_heatmap() will identify indicies for genes of interest (GOI) from a gene expression dataset
+# the gene expression dataset must be a dataframe with a column that contains gene names or WBGeneIDs
+# Input a vector of gene names and corresponding data frame column vector (using "$" operator)
+
+GOI_annotate_heatmap <- function(gene_names, rna_df_column){
+  index_list <- sapply(gene_names, function(x){
+    which(rna_df_column == x)
+  }
+  )
+  data.frame(index = index_list) %>% rownames_to_column(var = "name")
 }
