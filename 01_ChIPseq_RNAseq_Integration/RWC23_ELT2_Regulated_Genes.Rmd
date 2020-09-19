@@ -12,6 +12,17 @@ output:
 knitr::opts_chunk$set(echo = TRUE, fig_crop = FALSE)
 ```
 
+# Decide if plots should be saved to files:
+
+Change `plot` to `TRUE` if you want to write plots to a file
+change `plot` to `FALSE` if you do not want to write plots to a file
+
+```{r}
+plot <- FALSE
+plotdir <- "./03_plots/"
+```
+
+
 # Install Packages
 
 ```{r}
@@ -43,8 +54,8 @@ library(RVAideMemoire)
 library(dendextend)
 library(binom)
 library(circlize)
+library(lubridate)
 ```
-
 
 # Background and Rationale
 
@@ -167,40 +178,15 @@ dineen_nishimura_sets_ascend %>% head
 
 ## Load ELT-2 ChIP-seq binding annotations
 
+*Make sure the column names are correct here and that the factor levels match the cluster description names*
+
 ```{r}
-elt2_peaks <-
-  read_xlsx("./01_input/200410_peaksForBigBed.xlsx", sheet = "full cluster assignment")
-
-# elt2_peaks <- readRDS("./01_input/annotatedPeaks.rds")
-
-colnames(elt2_peaks) <-
-  c(
-    "chrom",
-    "start",
-    "end",
-    "peak.name",
-    "WBGeneID",
-    "mapping",
-    "cluster",
-    "cluster.description",
-    "kweight",
-    "LE",
-    "L1",
-    "L3",
-    "peak.summit.agreement"
-  )
+elt2_peaks <- read_csv(file = "./01_input/200719_annotatedPeaks.csv")
 
 elt2_peaks$cluster.description <-
   factor(
     elt2_peaks$cluster.description,
     levels = c(
-      "LE-specific",
-      "Post-embryonic",
-      "Increasing",
-      "L3-high",
-      "Not-changing or not IDR-passing"
-    ),
-    labels = c(
       "Embryo_Specific",
       "Larval",
       "Increasing",
@@ -222,7 +208,7 @@ Make a set of genes with ELT-2 binding detected in the L1 stage.
 
 ```{r}
 elt2_detected_in_L1 <-
-  elt2_peaks %>% select(WBGeneID, L1) %>% filter(L1 == 1) %>% select(WBGeneID) %>% unique()
+  elt2_peaks %>% select(WBGeneID, L1_IDR) %>% filter(L1_IDR == 1) %>% select(WBGeneID) %>% unique()
 
 elt2_detected_in_L1 %>% head
 elt2_detected_in_L1 %>% dim
@@ -446,9 +432,9 @@ Ha_L1chip <-
 
 Ha_L1chip
 
-# pdf("./03_plots/01a_DE_Heatmap_elt2elt7DERNAseq_L1elt2bound_200615.pdf", height = 4, width = 4.5)
-# Ha_L1chip
-# dev.off()
+if (plot == TRUE){
+myPDFplot(Ha_L1chip, "01a_DE_Heatmap_elt2elt7DERNAseq_L1elt2bound", 4, 4.5, plotdir)
+}
 ```
 
 Add Spencer intestine data
@@ -485,9 +471,10 @@ Ha_L1chip_spencer <- Ha_L1chip +
 
 Ha_L1chip_spencer
 
-# pdf("./03_plots/01b_DE_Heatmap_elt2elt7DERNAseq_L1elt2bound_spencerRNA_200913.pdf", height = 6.5, width = 6)
-# Ha_L1chip_spencer
-# dev.off()
+if (plot == TRUE) {
+  myPDFplot(Ha_L1chip_spencer, "01b_DE_Heatmap_elt2elt7DERNAseq_L1elt2bound_spencerRNA", height = 6.5, width = 6, plotdir)
+}
+
 ```
 
 Visually it appears that some elt2/elt7 differential expression clusters have more or less ELT-2 binding associated with the sets. I would like to be more quantitative with this assesment.  
@@ -560,7 +547,13 @@ l1bound_percents <-
 
 l1bound_percents
 
-# ggsave("./03_plots/02_proportion_of_l1elt2_per_expression_cluster_200428.pdf", height = 2, width = 5)
+if (plot == TRUE){
+myggsave(plot = l1bound_percents, 
+         name = "02_proportion_of_l1elt2_per_expression_cluster_200428",
+         height = 2,
+         width = 5,
+         plotdir = plotdir)
+}
 ```
 
 This plot shows that all of the differential expression sets have less than 50% of genes bound by ELT-2.  
@@ -571,7 +564,7 @@ Rather than viewing percentages of genes bound, what is the number of "bound" vs
 clust_L1bound_counts_ggplot <- as.data.frame(clust_L1bound_counts)
 colnames(clust_L1bound_counts_ggplot) <- c("SET", "Status", "Freq")
 
-ggplot(clust_L1bound_counts_ggplot,
+bound_per_cluster <- ggplot(clust_L1bound_counts_ggplot,
        aes(x = SET,
            y = Freq,
            fill = Status)) +
@@ -585,7 +578,17 @@ ggplot(clust_L1bound_counts_ggplot,
   theme_bw() +
   theme(axis.text.x = element_text(size = 13))
 
-# ggsave("./03_plots/03_number_of_l1elt2_per_expression_cluster_200428.pdf", height = 2, width = 5)
+bound_per_cluster
+
+if (plot == TRUE){
+myggsave(
+  plot = bound_per_cluster,
+  name = "03_number_of_l1elt2_per_expression_cluster", 
+  height = 2, 
+  width = 5,
+  plotdir = plotdir
+  )
+}
 ```
 
 
@@ -630,7 +633,7 @@ This says that SET3, SET4 and SET6 have a higher percentage of genes bound compa
 Make a plot that visually depicts this. Draw line on the percentage plot to indicate background percentage of L1 stage ELT-2 binding.  
 
 ```{r}
-l1bound_percents +
+l1bound_percents_verticle <- l1bound_percents +
   geom_hline(yintercept = proportion,
              color = "red",
              linetype = "dashed") +
@@ -642,11 +645,18 @@ l1bound_percents +
   coord_flip() +
   ggtitle("L1 stage ELT-2 binding per\nexperession set")
 
-# ggsave(
-#   "./03_plots/04_percentage_l1bound_per_expression_cluster_200615.pdf",
-#   width = 4,
-#   height = 5
-# )
+l1bound_percents_verticle
+
+if (plot == TRUE){
+myggsave(
+  plot = l1bound_percents_verticle,
+  name = "04_percentage_l1bound_per_expression_cluster",
+  width = 4,
+  height = 5,
+  plotdir = plotdir
+)
+}
+
 ```
 
 
@@ -739,11 +749,15 @@ Ha_L1chip_clusterchip <-
 
 Ha_L1chip_clusterchip
 
-# The code below sometimes throws an error
-# if so: print plot in console, then use Export>As PDF to save
-# pdf("./03_plots/05a_DE_Heatmap_L1elt2bound_elt2bindclusters_anno_200615.pdf", height = 6.5, width = 6)
-# Ha_L1chip_clusterchip
-# dev.off()
+if(plot == TRUE){
+  myPDFplot(
+    plot = Ha_L1chip_clusterchip,
+    name = "05a_DE_Heatmap_L1elt2bound_elt2bindclusters_anno",
+    height = 6.5,
+    width = 6,
+    plotdir = plotdir
+  )
+}
 ```
 
 Add Spencer intestine RNA row annotation
@@ -767,9 +781,16 @@ Ha_L1chip_clusterchip_spencerRNA <- Ha_L1chip_clusterchip +
 
 Ha_L1chip_clusterchip_spencerRNA
 
-# pdf("./03_plots/05b_DE_Heatmap_L1elt2bound_elt2bindclusters_spencerRNA_anno_200913.pdf", height = 6.5, width = 8)
-# Ha_L1chip_clusterchip_spencerRNA
-# dev.off()
+if (plot == TRUE){
+  myPDFplot(
+    plot = Ha_L1chip_clusterchip_spencerRNA,
+    name = "05b_DE_Heatmap_L1elt2bound_elt2bindclusters_spencerRNA_anno",
+    height = 6.5,
+    width = 8,
+    plotdir = plotdir
+  )
+  }
+
 ```
 
 
@@ -795,15 +816,15 @@ Make a dataframe that addresses the question:
 
 expressionSet_per_BindingCluster <- data.frame()
 for (i in elt2_cluster_names) {
-  toappend <-
+  toappend1 <-
     table(exprclust_bindclust$set,
           exprclust_bindclust[[i]]) %>%
     as.data.frame.matrix() %>%
-    rownames_to_column(var = "set") %>%
-    mutate(ELT2_cluster = i,
+    rownames_to_column(var = "set")
+    toappend2 <- mutate(toappend1, ELT2_cluster = i,
            percent = present / (present + absent))
   expressionSet_per_BindingCluster <-
-    bind_rows(expressionSet_per_BindingCluster, toappend)
+    bind_rows(expressionSet_per_BindingCluster, toappend2)
 }
 
 expressionSet_per_BindingCluster$ELT2_cluster <-
@@ -816,26 +837,43 @@ expressionSet_per_BindingCluster
 Make a plot that addresses the question: What is the percentage of genes with annotated ELT2 binding clusters per expression dataset?
 
 ```{r}
-ggplot(expressionSet_per_BindingCluster,
+percent_bind_cluster_per_DE_set <- ggplot(expressionSet_per_BindingCluster,
        aes(x = set,
            y = present,
            fill = ELT2_cluster)) +
   geom_bar(stat = "identity", position = "fill") +
   theme_classic() +
   scale_fill_manual(values = as.vector(cluster_colors$val))
-
+percent_bind_cluster_per_DE_set
 # ggsave("./03_plots/06_Cluster_percent_present_per_Set_200615.pdf")
+
+if (plot == TRUE){
+myggsave(plot = percent_bind_cluster_per_DE_set, 
+         name = "06_Cluster_percent_present_per_Set",
+         plotdir = plotdir,
+         width = 5,
+         height = 3)
+}
+
 ```
 
 # What is the percentage of genes within each Expression Set that are associated with an ELT-2 binding cluster?
 
 ```{r}
-ggplot(expressionSet_per_BindingCluster,
+expressionSet_per_BindingCluster_plot <- ggplot(expressionSet_per_BindingCluster,
        aes(x = ELT2_cluster, y = present, fill = set)) +
   geom_bar(stat = "identity", position = "fill") +
   theme_classic()
+expressionSet_per_BindingCluster_plot
 
-# ggsave("./03_plots/07_Set_percent_present_per_Cluster_200615.pdf")
+if (plot == TRUE){
+myggsave(plot = expressionSet_per_BindingCluster_plot, 
+         name = "07_Set_percent_present_per_Cluster",
+         plotdir = plotdir,
+         width = 5,
+         height = 3)
+}
+
 ```
 
 Make a series of horizontal barplots with percentage of ELT-2 binding cluster per expression cluster.  
@@ -901,7 +939,7 @@ expression_binding_stats %>% head()
 
 
 ```{r}
-ggplot(expression_binding_stats,
+per_cluster_pattern_percent <- ggplot(expression_binding_stats,
        aes(x = set,
            y = percent, fill = ELT2_cluster)) +
   geom_bar(stat = "identity") +
@@ -922,9 +960,17 @@ ggplot(expression_binding_stats,
   facet_grid(. ~ ELT2_cluster) +
   scale_fill_manual(values = as.character(cluster_colors$val))
 
-# ggsave(filename = "./03_plots/08_Percent_of_ELT2bindClust_per_ExpressionClust_200615.pdf",
-#        height = 5,
-#        width = 7)
+per_cluster_pattern_percent
+
+if (plot == TRUE){
+myggsave(plot = per_cluster_pattern_percent,
+      name = "08_Percent_of_ELT2bindClust_per_ExpressionClustf",
+       height = 5,
+       width = 7,
+      plotdir = plotdir)
+  }
+
+
 ```
 
 # Subset ELT-2/ELT-7 differentially expressed genes based on ELT-2 binding in L1 stage
@@ -984,10 +1030,14 @@ Ha_bound_only <-
               row_title = c("SET2", "SET3", "SET1", "SET4"))
 
 Ha_bound_only
-
-# pdf("./03_plots/09a_DE_Heatmap_L1elt2boundOnly_200913.pdf", height = 6.5, width = 6)
-# Ha_bound_only
-# dev.off()
+if (plot == TRUE){
+  myPDFplot(
+    plot = Ha_bound_only,
+    name = "09a_DE_Heatmap_L1elt2boundOnly",
+    height = 6.5, width = 6,
+    plotdir = plotdir
+  )
+}
 ```
 
 ```{r}
@@ -1012,10 +1062,15 @@ head(bound_only_annotation_ascend)
 Ha_bound_only_chipClust <-
   Ha_bound_only + binding_cluster_row_annotation(bound_only_elt2_clust_anno)
 Ha_bound_only_chipClust
-
-# pdf("./03_plots/09b_DE_Heatmap_L1elt2boundOnly_elt2bindclusters_anno_200913.pdf", height = 6.5, width = 6)
-# Ha_bound_only_chipClust
-# dev.off()
+if (plot == TRUE){
+  myPDFplot(
+    plot = Ha_bound_only_chipClust,
+    name = "09b_DE_Heatmap_L1elt2boundOnly_elt2bindclusters_anno",
+    height = 6.5,
+    width = 6,
+    plotdir = plotdir
+  )
+  }
 ```
 ## Add Spencer intestine expression row annotation
 
@@ -1052,9 +1107,15 @@ Ha_bound_only_chipClust_spencer <- Ha_bound_only_chipClust +
 
 Ha_bound_only_chipClust_spencer
 
-# pdf("./03_plots/09c_DE_Heatmap_L1elt2boundOnly_elt2bindclusters_anno_200913.pdf", height = 6.5, width = 6)
-# Ha_bound_only_chipClust_spencer
-# dev.off()
+if (plot == TRUE){
+  myPDFplot(
+    plot = Ha_bound_only_chipClust_spencer,
+    name = "09c_DE_Heatmap_L1elt2boundOnly_elt2bindclusters_spencerRNA",
+    height = 6.5,
+    width = 6,
+    plotdir = plotdir
+  )
+  }
 ```
 
 ## What is the percentage of genes with annotated ELT2 binding clusters per expression dataset?
@@ -1098,7 +1159,7 @@ bound_only_expressionSet_per_BindingCluster
 Make a plot that addresses the question: What is the percentage of genes with annotated ELT2 binding clusters per expression dataset?
 
 ```{r}
-ggplot(
+bound_percent_plot <- ggplot(
   bound_only_expressionSet_per_BindingCluster,
   aes(x = set,
       y = present,
@@ -1108,20 +1169,34 @@ ggplot(
   theme_classic() +
   scale_fill_manual(values = as.vector(cluster_colors$val))
 
-# ggsave("./03_plots/10a_Bound_Only_Cluster_percent_present_per_Set_200913.pdf")
+bound_percent_plot
+
+if (plot == TRUE){
+myggsave(plot = bound_percent_plot, 
+         name = "10a_Bound_Only_Cluster_percent_present_per_Set",
+         height = 3,
+         width = 5,
+         plotdir = plotdir)
+}
 ```
 
 ## What is the percentage of genes within each Expression Set that are associated with an ELT-2 binding cluster?
 
 ```{r}
-ggplot(
+bound_percent_plot_inverse <- ggplot(
   bound_only_expressionSet_per_BindingCluster,
   aes(x = ELT2_cluster, y = present, fill = set)
 ) +
   geom_bar(stat = "identity", position = "fill") +
   theme_classic()
-
-# ggsave("./03_plots/10b_Bound_Only_Set_percent_present_per_Cluster_200913.pdf")
+bound_percent_plot_inverse
+if (plot == TRUE){
+myggsave(plot = bound_percent_plot_inverse, 
+         name = "10b_Bound_Only_Set_percent_present_per_Cluster",
+         height = 3,
+         width = 5,
+         plotdir = plotdir)
+}
 ```
 
 Make a series of horizontal barplots with percentage of ELT-2 binding cluster per expression cluster.  
@@ -1186,7 +1261,7 @@ bound_only_expression_binding_stats %>% head()
 
 
 ```{r}
-ggplot(bound_only_expression_binding_stats,
+bound_percent_multi <- ggplot(bound_only_expression_binding_stats,
        aes(x = set,
            y = percent, fill = ELT2_cluster)) +
   geom_bar(stat = "identity") +
@@ -1207,9 +1282,15 @@ ggplot(bound_only_expression_binding_stats,
   facet_grid(. ~ ELT2_cluster) +
   scale_fill_manual(values = as.character(cluster_colors$val))
 
-# ggsave(filename = "./03_plots/11_Bound_Only_Percent_of_ELT2bindClust_per_ExpressionClust_200615.pdf",
-#        height = 5,
-#        width = 8)
+bound_percent_multi
+
+if (plot == TRUE){
+myggsave(plot = bound_percent_multi, 
+         name = "11_Bound_Only_Percent_of_ELT2bindClust_per_ExpressionClust",
+         height = 5,
+         width = 8,
+         plotdir = plotdir)
+}
 ```
 
 # Make a TF subset heatmap
@@ -1239,9 +1320,15 @@ tf_heatmap <- Heatmap(
 )
 tf_heatmap
 
-# pdf("./03_plots/12_Differential_Expression_of_All_TFs.pdf", height = 20, width = 4)
-# tf_heatmap
-# dev.off()
+if (plot == TRUE){
+  myPDFplot(
+    plot = tf_heatmap,
+    name = "12_Differential_Expression_of_All_TFs",
+    height = 20,
+    width = 4,
+    plotdir = plotdir
+  )
+  }
 ```
 
 Add row annotation to indicate ELT-2 binding in L1 stage
@@ -1270,6 +1357,16 @@ tf_heatmap_L1bound
 # pdf("./03_plots/13a_Differential_Expression_of_All_TFs_L1elt2bound_anno.pdf", height = 5, width = 5.5)
 # tf_heatmap_L1bound
 # dev.off()
+
+if (plot == TRUE){
+  myPDFplot(
+    plot = tf_heatmap_L1bound,
+    name = "13a_Differential_Expression_of_All_TFs_L1elt2bound_anno",
+    height = 5,
+    width = 5.5,
+    plotdir = plotdir
+  )
+  }
 ```
 
 Add row annotation of intestine expression from Spencer intestine RNA data
@@ -1305,9 +1402,15 @@ tf_heatmap_L1bound_spencerRNA <- tf_heatmap_L1bound + rowAnnotation(
 
 tf_heatmap_L1bound_spencerRNA
 
-# pdf("./03_plots/13b_Differential_Expression_of_All_TFs_L1elt2bound_anno.pdf", height = 5, width = 5.5)
-# tf_heatmap_L1bound_spencerRNA
-# dev.off()
+if (plot == TRUE){
+  myPDFplot(
+    plot = tf_heatmap_L1bound_spencerRNA,
+    name = "13b_Differential_Expression_of_All_TFs_L1elt2bound_anno",
+    height = 5,
+    width = 5.5,
+    plotdir = plotdir
+  )
+  }
 ```
 
 Split heatmap based on L1 binding
@@ -1321,9 +1424,15 @@ tf_heatmap_L1bound_split <- RNA_heatmap(dynamic_counts_matrix_scaled_TFs_names,
                 )))
 tf_heatmap_L1bound_split
 
-# pdf("./03_plots/14a_Differential_Expression_of_All_TFs_L1elt2bound_split.pdf", height = 5, width = 5.5)
-# tf_heatmap_L1bound_split
-# dev.off()
+if (plot == TRUE){
+  myPDFplot(
+    plot = tf_heatmap_L1bound_split,
+    name = "14a_Differential_Expression_of_All_TFs_L1elt2bound_split",
+    height = 5,
+    width = 5.5,
+    plotdir = plotdir
+  )
+  }
 ```
 
 
@@ -1350,9 +1459,15 @@ tf_heatmap_L1bound_split_spencerRNA <- tf_heatmap_L1bound_split +
 
 tf_heatmap_L1bound_split_spencerRNA
 
-# pdf("./03_plots/14b_Differential_Expression_of_All_TFs_L1elt2bound_split_spencerRNA.pdf", height = 5, width = 5.5)
-# tf_heatmap_L1bound_split_spencerRNA
-# dev.off()
+if (plot == TRUE){
+  myPDFplot(
+    plot = tf_heatmap_L1bound_split_spencerRNA,
+    name = "14b_Differential_Expression_of_All_TFs_L1elt2bound_split_spencerRNA",
+    height = 5,
+    width = 5.5,
+    plotdir = plotdir
+  )
+  }
 ```
 
 Zoom in on only bound TFs
@@ -1379,10 +1494,15 @@ HAboundTF <- Heatmap(
 
 HAboundTF
 
-# pdf("./03_plots/15a_Differential_Expression_Bound_TFs_only.pdf", height = 5, width = 5.5)
-# HAboundTF
-# dev.off()
-
+if (plot == TRUE){
+  myPDFplot(
+    plot = HAboundTF,
+    name = "15a_Differential_Expression_Bound_TFs_only",
+    height = 5,
+    width = 5.5,
+    plotdir = plotdir
+  )
+  }
 ```
 
 ```{r}
@@ -1416,9 +1536,15 @@ HAboundTF_spencerRNA <- HAboundTF + rowAnnotation(
 
 HAboundTF_spencerRNA
 
-# pdf("./03_plots/15b_Differential_Expression_Bound_TFs_only_spencerRNA.pdf", height = 5, width = 5.5)
-# HAboundTF_spencerRNA
-# dev.off()
+if (plot == TRUE){
+  myPDFplot(
+    plot = HAboundTF_spencerRNA,
+    name = "15b_Differential_Expression_Bound_TFs_only_spencerRNA",
+    height = 5,
+    width = 5.5,
+    plotdir = plotdir
+  )
+  }
 ```
 
 

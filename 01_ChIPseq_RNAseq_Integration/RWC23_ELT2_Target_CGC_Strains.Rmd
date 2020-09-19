@@ -37,7 +37,7 @@ for (i in 1:(total_strains)){
 # cgc_strains_df$string[str_detect(cgc_strains_df$string, pattern = "elt-2")]
 ```
 
-Set up quick and direty way of cross referencing the CGC list to ELT-2/ELT-7 differential expression list. Prioritize genes with high variance between the different elt-2/elt-7 deletion genotypes. Spot check the strains on CGC to ensure they are protein::GFP worms and nothing extra. Also visualize the gene on the genome browser to see RNA changes.
+Set up quick and dirty way to cross-reference the CGC list to ELT-2/ELT-7 differential expression list. Prioritize genes with high variance between the different elt-2/elt-7 deletion genotypes. Spot check the strains on CGC to ensure they are protein::GFP worms and nothing extra. Also visualize the gene on the genome browser to see RNA changes.
 
 ```{r}
 variance_per_gene <-  as.data.frame(matrix_select(dynamic_counts_matrix, l1_bound_list$WBGeneID)) %>% rownames_to_column(var = "WBGeneID") %>% 
@@ -126,8 +126,8 @@ Ha_bound_only_test_gene <- Ha_bound_only +
 
 Ha_bound_only_test_gene
 
-pdf(file = "./03_plots/200729_ELT2_DE_Genes_ELT2bound_Test_Genes_Annotated.pdf", width = 5, height = 5)
-Ha_bound_only_test_gene
-dev.off()
+# pdf(file = "./03_plots/200729_ELT2_DE_Genes_ELT2bound_Test_Genes_Annotated.pdf", width = 5, height = 5)
+# Ha_bound_only_test_gene
+# dev.off()
 ```
 

@@ -251,7 +251,8 @@ make_cluster_annotation <- function(input_matrix, binding_matrix){
       L3_High = 0,
       Not_Changing = 0
     )) %>% 
-    rename(WBGeneID = rowname)
+    dplyr::rename(WBGeneID = "rowname")
+  df
 }
 
 # make_cluster_binary_annotation() will convert number of binding sites per ELT2 binding pattern
@@ -311,4 +312,35 @@ GOI_annotate_heatmap <- function(gene_names, rna_df_column){
   }
   )
   data.frame(index = index_list) %>% rownames_to_column(var = "name")
+}
+
+# myPDFplot(), wrapper to save ComplexHeatmap images to a PDF file
+
+myPDFplot <- function(plot, name, height, width, plotdir = plotdir) {
+  pdf(
+    paste(plotdir,
+          name,
+          "_",
+          today(),
+          ".pdf",
+          sep = ""),
+    height = height,
+    width = width
+  )
+  print(plot)
+  dev.off()
+}
+
+myggsave <- function(plot, name, height = NA, width = NA, plotdir = plotdir) {
+    ggsave(
+      filename = paste(plotdir,
+            name,
+            "_",
+            today(),
+            ".pdf",
+            sep = ""),
+      plot = plot,
+      height = height,
+      width = width
+      )
 }
