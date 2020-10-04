@@ -1268,10 +1268,10 @@ bound_percent_multi <- ggplot(bound_only_expression_binding_stats,
   scale_y_continuous(limits = c(0, 1.5)) +
   theme_classic() +
   geom_hline(
-    data = bound_only_percent_bound_per_ELT2_cluster,
+    data = bound_only_expression_binding_stats %>% ungroup() %>% select(ELT2_cluster, background_percent) %>% unique,
     color = "red",
     linetype = "dashed",
-    aes(yintercept = percent)
+    aes(yintercept = background_percent)
   ) +
   geom_errorbar(
     ymax = bound_only_expression_binding_stats$conf.upper,
