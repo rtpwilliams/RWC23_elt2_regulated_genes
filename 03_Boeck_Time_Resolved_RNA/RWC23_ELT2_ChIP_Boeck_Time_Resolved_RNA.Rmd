@@ -1,6 +1,7 @@
 ---
 title: "RWC23_ELT2_ChIP_Boeck_Time_Resolved_RNA"
 output:
+  pdf_document: default
   html_document:
     df_print: paged
 ---
