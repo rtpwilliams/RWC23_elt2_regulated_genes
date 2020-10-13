@@ -108,12 +108,7 @@ time_resolved_rna_intestine_matrix <-
   as.matrix()
 head(time_resolved_rna_intestine_matrix)
 ```
-```{r}
 
-
-rowvariances=apply(time_resolved_rna_intestine_matrix,1,var)
-plot(ecdf(rowvariances))
-```
 Perform row normalization
 
 ```{r}
@@ -258,415 +253,75 @@ chip_rna_matrix = chip_rna_matrix_log
 rownames(chip_rna_matrix) <- chip_rna_df$wikigene_name
 chip_rna_matrix_scaled <- row_scale(chip_rna_matrix) # calls base::scale() via RWC23_Functions.R
 
-
-
 ```
 
 ```{r print-gene-names-indices}
-# for (name in gene_names) {
-#   index <- which(rownames(chip_rna_matrix_scaled) == name)
-#   for (i in 1:length(index)) {
-#     print(c(name, index[i]))
-#   }
-# }
-```
-```{r chip_GOI_df}
-# This is now done directly before plotting to incorporate filtering
-
-# chip_GOI_df <- data.frame(name = NULL, index = NULL)
-# for (name in gene_names) {
-#   index <- which(rownames(chip_rna_matrix_scaled) == name)
-#   for (i in 1:length(index)) {
-#     toappend <-
-#       data.frame(name = name,
-#                  index = index[i],
-#                  stringsAsFactors = FALSE)
-#     chip_GOI_df <- bind_rows(chip_GOI_df, toappend)
-#   }
-# }
-# chip_GOI_df
-```
-```{r gower_dist, include=F}
-# chip_rna_matrix_scaled_df = as.data.frame(chip_rna_matrix_scaled)
-# chip_rna_matrix_scaled_df$elt2 = factor(chip_rna_df$cluster.description)
-# gower_dist <- daisy(chip_rna_matrix_scaled_df, metric="gower", type=list(logratio=3))
-# summary(gower_dist)
-# gower_mat <- as.matrix(gower_dist)
-# chip_rna_matrix_scaled_df[which(gower_mat == min(gower_mat[gower_mat != min(gower_mat)]), arr.ind = TRUE)[1, ], ]
-# chip_rna_matrix_scaled_df[
-#   which(gower_mat == max(gower_mat[gower_mat != max(gower_mat)]),
-#         arr.ind = TRUE)[1, ], ]
-# 
-# # Do the silhouette widths to find the optimum number of partitions.
-# # This procedure is very time-consuming.
-# sil_width <- c(NA)
-# nclusts=11
-# for(i in 2:nclusts){
-#   print(i)
-#   pam_fit <- pam(gower_dist,
-#                  diss = TRUE,
-#                  k = i)
-# 
-#   sil_width[i] <- pam_fit$silinfo$avg.width
-#   print(sil_width[i])
-# }
-# 
-# # Plot silhouette width (higher is better)
-# #
-# plot(1:nclusts, sil_width,
-#      xlab = "Number of clusters",
-#      ylab = "Silhouette Width")
-# lines(1:nclusts, sil_width)
-# # all data- 9 is the peak at 0.3373983
-# # Embryo_548min, L1, L3 continues to increase, but 14 is a local peak at 0.5625833
-# pam_fit <- pam(gower_dist, diss = TRUE, k = 8)
-
-```
-
-```{r cstats}
-library(fpc)
-cstats.table <- function(dist, tree, k) {
-clust.assess <- c("cluster.number","n","within.cluster.ss","average.within","average.between",
-                  "wb.ratio","dunn2","avg.silwidth")
-clust.size <- c("cluster.size")
-stats.names <- c()
-row.clust <- c()
-output.stats <- matrix(ncol = k, nrow = length(clust.assess))
-cluster.sizes <- matrix(ncol = k, nrow = k)
-for(i in c(1:k)){
-  row.clust[i] <- paste("Cluster-", i, " size")
-}
-for(i in c(2:k)){
-  cat("Doing k",i,"...")
-  stats.names[i] <- paste("Test", i-1)
-  
-  for(j in seq_along(clust.assess)){
-    output.stats[j, i] <- unlist(cluster.stats(d = dist, clustering = cutree(tree, k = i))[clust.assess])[j]
-    
+for (name in gene_names) {
+  index <- which(rownames(chip_rna_matrix_scaled) == name)
+  for (i in 1:length(index)) {
+    print(c(name, index[i]))
   }
-  
-  for(d in 1:k) {
-    cluster.sizes[d, i] <- unlist(cluster.stats(d = dist, clustering = cutree(tree, k = i))[clust.size])[d]
-    dim(cluster.sizes[d, i]) <- c(length(cluster.sizes[i]), 1)
-    cluster.sizes[d, i]
-    
-  }
-  cat("done,  ")
 }
-output.stats.df <- data.frame(output.stats)
-cluster.sizes <- data.frame(cluster.sizes)
-cluster.sizes[is.na(cluster.sizes)] <- 0
-rows.all <- c(clust.assess, row.clust)
-# rownames(output.stats.df) <- clust.assess
-output <- rbind(output.stats.df, cluster.sizes)[ ,-1]
-colnames(output) <- stats.names[2:k]
-rownames(output) <- rows.all
-is.num <- sapply(output, is.numeric)
-output[is.num] <- lapply(output[is.num], round, 2)
-output
-}
-
 ```
+```{r heatmap_function}
+BoeckRNA_ELT2_chip_Heatmap <- function(subsetrows, label) {
+  
+  ix=which(rownames(chip_rna_matrix_scaled)[subsetrows] %in% gene_names)
+  chip_GOI_df = data.frame(name=rownames(chip_rna_matrix_scaled)[subsetrows][ix], index =ix )
+  
+  BoeckRNA_ELT2_chip <- Heatmap(
+  chip_rna_matrix_scaled[subsetrows,],
+  name = "Boeck Time Resolved RNA",
+  row_split = chip_rna_df$cluster.description[subsetrows],
+  column_title = label,
+  row_title = NULL,
+  cluster_columns = FALSE
+) +
+  rowAnnotation(
+    ELT2_cluster = chip_rna_df$cluster.description[subsetrows],
+    col = list(
+      ELT2_cluster = c(
+        "Embryo_Specific" = "#7570B3",
+        "Larval" = "#1B9E77",
+        "Increasing" = "#E7298A",
+        "L3_High" = "#D95F02",
+        "Not_Changing" = "#505050",
+        "Not_Bound" = "yellow"
+      )
+    ),
+    border = TRUE
+  ) +  rowAnnotation(foo = anno_mark(at = chip_GOI_df$index,
+                               labels = chip_GOI_df$name))
+BoeckRNA_ELT2_chip
+}
+```
+
 
 ```{r BoeckRNA_ELT2_chip}
-real = apply(chip_rna_matrix_scaled, 1, function(x) { ! any(is.na(x)) }) # NA's introduced by log transform don't jive here
-changing = rowvariances > quantile(rowvariances,.25)
-# euc.dist = dist(chip_rna_matrix_scaled[real & changing,])
-# aggl.clust.c <- hclust(euc.dist, method = "complete")
-# 
-# #stats.df.aggl <-cstats.table(euc.dist, aggl.clust.c, 15)
-# stats.df.aggl
-# ggplot(data = data.frame(t(stats.df.aggl)), 
-#   aes(x=cluster.number, y=within.cluster.ss)) + 
-#   geom_point()+
-#   geom_line()+
-#   ggtitle("Agglomerative clustering") +
-#   labs(x = "Num.of clusters", y = "Within clusters sum of squares (SS)") +
-#   theme(plot.title = element_text(hjust = 0.5))
-# 
-# # Silhouette
-# ggplot(data = data.frame(t(stats.df.aggl)), 
-#   aes(x=cluster.number, y=avg.silwidth)) + 
-#   geom_point()+
-#   geom_line()+
-#   ggtitle("Agglomerative clustering") +
-#   labs(x = "Num.of clusters", y = "Average silhouette width") +
-#   theme(plot.title = element_text(hjust = 0.5))
-# 
-# library("dendextend")
-# dendro <- as.dendrogram(aggl.clust.c)
-# dendro.col <- dendro %>%
-#   set("branches_k_color", k = 4, value =   c("darkslategray","darkslategray3", "gold3", "darkcyan"))%>%
-#   set("branches_lwd", 0.6) 
-#   # set("labels_colors", 
-#   #     value = c("darkslategray")) %>% 
-#   # set("labels_cex", 0.5)
-# ggd1 <- as.ggdend(dendro.col)
-# ggplot(ggd1, theme = theme_minimal()) +
-#   labs(x = "Num. observations", y = "Height", title = "Dendrogram, k = 4")
-# 
-# 
-# ix=which(rownames(chip_rna_matrix_scaled)[real & changing] %in% gene_names)
-# chip_GOI_df = data.frame(name=rownames(chip_rna_matrix_scaled)[real & changing][ix],
-#                          index =ix )
-# ### ALL ###
-# BoeckRNA_ELT2_chip <- Heatmap(
-#   chip_rna_matrix_scaled[real & changing ,],
-#   name = "Boeck Time Resolved RNA",
-#   #row_split = chip_rna_df$cluster.description[real & changing ],
-#   column_title = sprintf("Log(RNA Timecourse), exclude lowest 25%% variance"),
-#   row_title = NULL,
-#   row_dend_width = unit(20, "mm"),
-#   row_km = 4,
-#   #clustering_distance_rows = function(x) {philentropy::distance(x,method="euclidean", test.na=F)},
-#   #clustering_distance_rows = function(x) daisy(x, metric="gower", type=list(logratio=3)),
-#   cluster_columns = FALSE
-# ) +
-#   rowAnnotation(
-#     ELT2_cluster = chip_rna_df$cluster.description[real & changing ],
-#     col = list(
-#       ELT2_cluster = c(
-#         "Embryo_Specific" = "#7570B3",
-#         "Larval" = "#1B9E77",
-#         "Increasing" = "#E7298A",
-#         "L3_High" = "#D95F02",
-#         "Not_Changing" = "#505050",
-#         "Not_Bound" = "yellow"
-#       )
-#     ),
-#     border = TRUE
-#   ) +  rowAnnotation(foo = anno_mark(at = chip_GOI_df$index,
-#                                labels = chip_GOI_df$name))
-# BoeckRNA_ELT2_chip
- ```
- 
- ```{r}
 gene_names <-
   c("flh-3", "elt-7", "clec-258", "pqm-1", "mtl-2", "ets-4", "aat-6")
 
-
+real = apply(chip_rna_matrix_scaled, 1, function(x) { ! any(is.na(x)) }) # NA's introduced by log transform don't jive here
 embryo_specific = chip_rna_df$cluster.description == "Embryo_Specific"
 larval = chip_rna_df$cluster.description == "Larval"
 
 #changing = rowvariances > 0.1355294 # .05 thresh from chipseq
 
-####                          #####
-####                          #####
-#### NO THRESHOLD ON VARIANCE #####
-changing = rowvariances > 0
-####                          #####
-####                          #####
-# find Genes Of Interest in subsetted table
-ix=which(rownames(chip_rna_matrix_scaled)[real & changing] %in% gene_names)
-chip_GOI_df = data.frame(name=rownames(chip_rna_matrix_scaled)[real & changing][ix],
-                         index =ix )
 ### ALL ###
-BoeckRNA_ELT2_chip <- Heatmap(
-  chip_rna_matrix_scaled[real & changing ,],
-  name = "Boeck Time Resolved RNA",
-  row_split = chip_rna_df$cluster.description[real & changing ],
-  column_title = sprintf("Log(RNA Timecourse), No threshold on variance"),
-  row_title = NULL,
-  #clustering_distance_rows = function(x) {philentropy::distance(x,method="euclidean", test.na=F)},
-  #clustering_distance_rows = function(x) daisy(x, metric="gower", type=list(logratio=3)),
-  cluster_columns = FALSE
-) +
-  rowAnnotation(
-    ELT2_cluster = chip_rna_df$cluster.description[real & changing ],
-    col = list(
-      ELT2_cluster = c(
-        "Embryo_Specific" = "#7570B3",
-        "Larval" = "#1B9E77",
-        "Increasing" = "#E7298A",
-        "L3_High" = "#D95F02",
-        "Not_Changing" = "#505050",
-        "Not_Bound" = "yellow"
-      )
-    ),
-    border = TRUE
-  ) +  rowAnnotation(foo = anno_mark(at = chip_GOI_df$index,
-                               labels = chip_GOI_df$name))
-BoeckRNA_ELT2_chip
+changing = rowvariances > 0
+BoeckRNA_ELT2_chip_Heatmap(real & changing, "Log(RNA Timecourse), No threshold on variance")
+BoeckRNA_ELT2_chip_Heatmap(real & changing & embryo_specific, "Log(RNA Timecourse), No threshold on variance")
 
-#### EMBRYO ONLY ####
-
-ix=which(rownames(chip_rna_matrix_scaled)[real & changing & embryo_specific] %in% gene_names)
-chip_GOI_df = data.frame(name=rownames(chip_rna_matrix_scaled)[real & changing & embryo_specific][ix], index =ix )
-
-BoeckRNA_ELT2_chip <- Heatmap(
-  chip_rna_matrix_scaled[real & changing & embryo_specific,],
-  name = "Boeck Time Resolved RNA",
-  row_split = chip_rna_df$cluster.description[real & changing & embryo_specific],
-  column_title = sprintf("Log(RNA Timecourse) no threshold on variance", quantile(rowvariances,.05)),
-  row_title = NULL,
-  #clustering_distance_rows = function(x) {philentropy::distance(x,method="euclidean", test.na=F)},
-  #clustering_distance_rows = function(x) daisy(x, metric="gower", type=list(logratio=3)),
-  cluster_columns = FALSE
-) +
-  rowAnnotation(
-    ELT2_cluster = chip_rna_df$cluster.description[real & changing & embryo_specific],
-    col = list(
-      ELT2_cluster = c(
-        "Embryo_Specific" = "#7570B3",
-        "Larval" = "#1B9E77",
-        "Increasing" = "#E7298A",
-        "L3_High" = "#D95F02",
-        "Not_Changing" = "#505050",
-        "Not_Bound" = "yellow"
-      )
-    ),
-    border = TRUE
-  ) + rowAnnotation(foo = anno_mark(at = chip_GOI_df$index, labels = chip_GOI_df$name))
-BoeckRNA_ELT2_chip
-
-
-####                          #####
-####                          #####
-####  VARIANCE > lowest .05   #####
+### Exclude the least changing, lower 5% of variance ###
 changing = rowvariances > quantile(rowvariances,.05)
-####                          #####
-####                          #####
-# find Genes Of Interest in subsetted table
-ix=which(rownames(chip_rna_matrix_scaled)[real & changing] %in% gene_names)
-chip_GOI_df = data.frame(name=rownames(chip_rna_matrix_scaled)[real & changing ][ix],
-                         index =ix )
+BoeckRNA_ELT2_chip_Heatmap(real & changing, "Log(RNA Timecourse), Exclude lower 5% variance")
+BoeckRNA_ELT2_chip_Heatmap(real & changing & embryo_specific, "Log(RNA Timecourse), Exclude lower 5% variance")
 
-BoeckRNA_ELT2_chip <- Heatmap(
-  chip_rna_matrix_scaled[real & changing, ],
-  name = "Boeck Time Resolved RNA",
-  row_split = chip_rna_df$cluster.description[real & changing],
-  column_title = sprintf("Log(RNA Timecourse), var > %.2f (q.05)", quantile(rowvariances,.05)),
-  row_title = NULL,
-  #clustering_distance_rows = function(x) {philentropy::distance(x,method="euclidean", test.na=F)},
-  #clustering_distance_rows = function(x) daisy(x, metric="gower", type=list(logratio=3)),
-  cluster_columns = FALSE
-) +
-  rowAnnotation(
-    ELT2_cluster = chip_rna_df$cluster.description[real & changing],
-    col = list(
-      ELT2_cluster = c(
-        "Embryo_Specific" = "#7570B3",
-        "Larval" = "#1B9E77",
-        "Increasing" = "#E7298A",
-        "L3_High" = "#D95F02",
-        "Not_Changing" = "#505050",
-        "Not_Bound" = "yellow"
-      )
-    ),
-    border = TRUE
-  ) +  rowAnnotation(foo = anno_mark(at = chip_GOI_df$index,
-                               labels = chip_GOI_df$name))
-BoeckRNA_ELT2_chip
-
-ix=which(rownames(chip_rna_matrix_scaled)[real & changing & embryo_specific] %in% gene_names)
-chip_GOI_df = data.frame(name=rownames(chip_rna_matrix_scaled)[real & changing & embryo_specific][ix],
-                         index =ix )
-
-BoeckRNA_ELT2_chip <- Heatmap(
-  chip_rna_matrix_scaled[real & changing & embryo_specific,],
-  name = "Boeck Time Resolved RNA",
-  row_split = chip_rna_df$cluster.description[real & changing & embryo_specific],
-  column_title = sprintf("Log(RNA Timecourse), var > %.2f (q.05)", quantile(rowvariances,.05)),
-  row_title = NULL,
-  #clustering_distance_rows = function(x) {philentropy::distance(x,method="euclidean", test.na=F)},
-  #clustering_distance_rows = function(x) daisy(x, metric="gower", type=list(logratio=3)),
-  cluster_columns = FALSE
-) +
-  rowAnnotation(
-    ELT2_cluster = chip_rna_df$cluster.description[real & changing & embryo_specific],
-    col = list(
-      ELT2_cluster = c(
-        "Embryo_Specific" = "#7570B3",
-        "Larval" = "#1B9E77",
-        "Increasing" = "#E7298A",
-        "L3_High" = "#D95F02",
-        "Not_Changing" = "#505050",
-        "Not_Bound" = "yellow"
-      )
-    ),
-    border = TRUE
-  )  + rowAnnotation(foo = anno_mark(at = chip_GOI_df$index, labels = chip_GOI_df$name))
-BoeckRNA_ELT2_chip
-
-
-####                          #####
-####                          #####
-####  VARIANCE > 1 q(~.8)     #####
+### Include only rows with a variance greater than 1 ###
 changing = rowvariances > 1
-####                          #####
-####                          #####
-# find Genes Of Interest in subsetted table
-ix=which(rownames(chip_rna_matrix_scaled)[real & changing] %in% gene_names)
-chip_GOI_df = data.frame(name=rownames(chip_rna_matrix_scaled)[real & changing ][ix],
-                         index =ix )
-
-BoeckRNA_ELT2_chip <- Heatmap(
-  chip_rna_matrix_scaled[real & changing, ],
-  name = "Boeck Time Resolved RNA",
-  row_split = chip_rna_df$cluster.description[real & changing],
-  column_title = sprintf("Log(RNA Timecourse), variance > 1 (top 20%% data)"),
-  row_title = NULL,
-  #clustering_distance_rows = function(x) {philentropy::distance(x,method="euclidean", test.na=F)},
-  #clustering_distance_rows = function(x) daisy(x, metric="gower", type=list(logratio=3)),
-  cluster_columns = FALSE
-) +
-  rowAnnotation(
-    ELT2_cluster = chip_rna_df$cluster.description[real & changing],
-    col = list(
-      ELT2_cluster = c(
-        "Embryo_Specific" = "#7570B3",
-        "Larval" = "#1B9E77",
-        "Increasing" = "#E7298A",
-        "L3_High" = "#D95F02",
-        "Not_Changing" = "#505050",
-        "Not_Bound" = "yellow"
-      )
-    ),
-    border = TRUE
-  ) +  rowAnnotation(foo = anno_mark(at = chip_GOI_df$index,
-                               labels = chip_GOI_df$name))
-BoeckRNA_ELT2_chip
-
-ix=which(rownames(chip_rna_matrix_scaled)[real & changing & embryo_specific] %in% gene_names)
-chip_GOI_df = data.frame(name=rownames(chip_rna_matrix_scaled)[real & changing & embryo_specific][ix],
-                         index =ix )
-
-BoeckRNA_ELT2_chip <- Heatmap(
-  chip_rna_matrix_scaled[real & changing & embryo_specific,],
-  name = "Boeck Time Resolved RNA",
-  row_split = chip_rna_df$cluster.description[real & changing & embryo_specific],
-  column_title = sprintf("Log(RNA Timecourse), variance > 1 (top 20%% data)"),
-  row_title = NULL,
-  #clustering_distance_rows = function(x) {philentropy::distance(x,method="euclidean", test.na=F)},
-  #clustering_distance_rows = function(x) daisy(x, metric="gower", type=list(logratio=3)),
-  cluster_columns = FALSE
-) +
-  rowAnnotation(
-    ELT2_cluster = chip_rna_df$cluster.description[real & changing & embryo_specific],
-    col = list(
-      ELT2_cluster = c(
-        "Embryo_Specific" = "#7570B3",
-        "Larval" = "#1B9E77",
-        "Increasing" = "#E7298A",
-        "L3_High" = "#D95F02",
-        "Not_Changing" = "#505050",
-        "Not_Bound" = "yellow"
-      )
-    ),
-    border = TRUE
-  )  + rowAnnotation(foo = anno_mark(at = chip_GOI_df$index, labels = chip_GOI_df$name))
-BoeckRNA_ELT2_chip
-
-
-
-
-
-
-
-
-
-
-
+BoeckRNA_ELT2_chip_Heatmap(real & changing, "Log(RNA Timecourse), variance > 1 (top 20% data)")
+BoeckRNA_ELT2_chip_Heatmap(real & changing & embryo_specific, "Log(RNA Timecourse), variance > 1 (top 20% data)")
+BoeckRNA_ELT2_chip_Heatmap(real & changing & larval, "Log(RNA Timecourse), variance > 1 (top 20% data)")
 
 # pdf(file = "./03_plots/201008_Boeck_RNA_ELT2ChIP_Patterns_Subset.pdf", 
 #     width = 7, height = 7)
