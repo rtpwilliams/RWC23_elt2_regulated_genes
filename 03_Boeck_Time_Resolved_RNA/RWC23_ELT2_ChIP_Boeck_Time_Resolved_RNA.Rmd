@@ -52,7 +52,7 @@ time_resolved_rna <-
   )
 
 paramart <-
-  useMart("parasite_mart",
+  useMart("parasite_mart_15_merged",
           dataset = "wbps_gene",
           host = "https://parasite.wormbase.org",
           port = 443)
@@ -248,7 +248,6 @@ range(rowvariances) # no NaNs
 plot(ecdf(rowvariances)) # no "steps" anywhere, just a smooth curve
 # therefore, we will choose to exclude the lowest 5% of the rows by their variance
 
-changing = rowvariances > 1  # quantile(rowvariances,.1) # or .05
 chip_rna_matrix = chip_rna_matrix_log
 rownames(chip_rna_matrix) <- chip_rna_df$wikigene_name
 chip_rna_matrix_scaled <- row_scale(chip_rna_matrix) # calls base::scale() via RWC23_Functions.R
@@ -264,18 +263,30 @@ for (name in gene_names) {
 }
 ```
 ```{r heatmap_function}
-BoeckRNA_ELT2_chip_Heatmap <- function(subsetrows, label) {
+BoeckRNA_ELT2_chip_Heatmap <- 
+  function(subsetrows, 
+           column_title,
+           name = "Boeck Time Resolved RNA",                                
+           row_split=chip_rna_df$cluster.description[subsetrows],
+           clustering_distance_rows = "euclidean",
+           clustering_method_rows = "complete",
+           ...)
+           
+{
   
   ix=which(rownames(chip_rna_matrix_scaled)[subsetrows] %in% gene_names)
-  chip_GOI_df = data.frame(name=rownames(chip_rna_matrix_scaled)[subsetrows][ix], index =ix )
+  chip_GOI_df = data.frame(name=rownames(chip_rna_matrix_scaled)[subsetrows][ix], index=ix)
   
   BoeckRNA_ELT2_chip <- Heatmap(
   chip_rna_matrix_scaled[subsetrows,],
-  name = "Boeck Time Resolved RNA",
-  row_split = chip_rna_df$cluster.description[subsetrows],
-  column_title = label,
+  name=name,
+  row_split = row_split,
+  column_title = column_title,
   row_title = NULL,
-  cluster_columns = FALSE
+  cluster_columns = FALSE,
+  clustering_distance_rows = clustering_distance_rows,
+  clustering_method_rows = clustering_method_rows,
+  ...
 ) +
   rowAnnotation(
     ELT2_cluster = chip_rna_df$cluster.description[subsetrows],
@@ -304,28 +315,82 @@ gene_names <-
 real = apply(chip_rna_matrix_scaled, 1, function(x) { ! any(is.na(x)) }) # NA's introduced by log transform don't jive here
 embryo_specific = chip_rna_df$cluster.description == "Embryo_Specific"
 larval = chip_rna_df$cluster.description == "Larval"
+l3_high = chip_rna_df$cluster.description == "L3_High"
+increasing = chip_rna_df$cluster.description == "Increasing"
 
 #changing = rowvariances > 0.1355294 # .05 thresh from chipseq
 
 ### ALL ###
-changing = rowvariances > 0
+changing = rowvariances > 1
 BoeckRNA_ELT2_chip_Heatmap(real & changing, "Log(RNA Timecourse), No threshold on variance")
-BoeckRNA_ELT2_chip_Heatmap(real & changing & embryo_specific, "Log(RNA Timecourse), No threshold on variance")
 
+gene_names=rownames(chip_rna_matrix_scaled)[real & changing & embryo_specific]
+(BoeckRNA_ELT2_chip_Heatmap(real & changing & embryo_specific, "Log(RNA Timecourse), No threshold on variance",row_split=2)->emb)
+pdf(file="embryo.pdf",height=10.5,width=10.5)
+print(emb)
+dev.off()
+
+gene_names=rownames(chip_rna_matrix_scaled)[real & changing & larval]
+(BoeckRNA_ELT2_chip_Heatmap(real & changing & larval, "Log(RNA Timecourse), variance > 1 (top 20% data)",row_split=5)->larv)
+
+pdf(file="larval.pdf",height=14,width=14)
+print(larv)
+dev.off()
+
+gene_names=rownames(chip_rna_matrix_scaled)[real & changing & l3_high]
+(BoeckRNA_ELT2_chip_Heatmap(real & changing & l3_high, "Log(RNA Timecourse), variance > 1 (top 20% data)",row_split=4)->L3plot)
+pdf(file="L3.pdf",height=14,width=14)
+print(L3plot)
+dev.off()
+
+gene_names=rownames(chip_rna_matrix_scaled)[real & changing & increasing]
+(BoeckRNA_ELT2_chip_Heatmap(real & changing & increasing, "Log(RNA Timecourse), variance > 1 (top 20% data)",row_split=4)->inc)
+pdf(file="increasing.pdf",height=21,width=21)
+print(inc)
+dev.off()
+
+```
+
+```{r cluster comparisons and other exploration}
 ### Exclude the least changing, lower 5% of variance ###
 changing = rowvariances > quantile(rowvariances,.05)
+
 BoeckRNA_ELT2_chip_Heatmap(real & changing, "Log(RNA Timecourse), Exclude lower 5% variance")
+
+for (clustering_method in c("ward.D", "ward.D2", "single", "complete", "average", "mcquitty", "median", "centroid" )){
+    BoeckRNA_ELT2_chip_Heatmap(real & changing,
+                               sprintf("%s, Exclude lower 5%% variance",
+                                       toupper(clustering_method)),
+                               clustering_method_rows = clustering_method)-> plottedHM
+    print(plottedHM)
+}
+
+
 BoeckRNA_ELT2_chip_Heatmap(real & changing & embryo_specific, "Log(RNA Timecourse), Exclude lower 5% variance")
 
 ### Include only rows with a variance greater than 1 ###
 changing = rowvariances > 1
-BoeckRNA_ELT2_chip_Heatmap(real & changing, "Log(RNA Timecourse), variance > 1 (top 20% data)")
-BoeckRNA_ELT2_chip_Heatmap(real & changing & embryo_specific, "Log(RNA Timecourse), variance > 1 (top 20% data)")
-BoeckRNA_ELT2_chip_Heatmap(real & changing & larval, "Log(RNA Timecourse), variance > 1 (top 20% data)")
+
+for (clustering_method in c("ward.D", "ward.D2", "single", "complete", "average", "mcquitty", "median", "centroid" )){
+    BoeckRNA_ELT2_chip_Heatmap(real & changing,
+                               sprintf("Euclidean, %s, variance > 1 (top 20%% data)",
+                                       toupper(clustering_method)),
+                               clustering_method_rows = clustering_method)-> plottedHM
+    print(plottedHM)
+        BoeckRNA_ELT2_chip_Heatmap(real & changing,
+                               sprintf("Gower, %s, variance > 1 (top 20%% data)",
+                                       toupper(clustering_method)),
+                               clustering_method_rows = clustering_method,
+                               clustering_distance_rows = function(x){daisy(x,"gower")}
+                               )-> plottedHM
+    print(plottedHM)
+}
+
+
+
 
 # pdf(file = "./03_plots/201008_Boeck_RNA_ELT2ChIP_Patterns_Subset.pdf", 
 #     width = 7, height = 7)
 # BoeckRNA_ELT2_chip
 # dev.off()
 ```
-
