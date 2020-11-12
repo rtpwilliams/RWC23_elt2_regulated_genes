@@ -1,7 +1,7 @@
 ---
 title: "RWC23_ELT2_Regulated_Genes"
 author: "RTPW"
-date: "4/13/2020"
+date: "11/10/2020"
 output: 
   pdf_document: default
   fig_crop: no
@@ -181,19 +181,12 @@ dineen_nishimura_sets_ascend %>% head
 *Make sure the column names are correct here and that the factor levels match the cluster description names*
 
 ```{r}
-elt2_peaks <- read_csv(file = "./01_input/200719_annotatedPeaks.csv")
+# temp_peaks <- mcols(readRDS("/Users/rtpw/Dropbox/01_GITHUBREPO/RWC23_elt2_regulated_genes/01_ChIPseq_RNAseq_Integration/01_input/201019_annotatedPeaks.rds"))
+# write.csv(temp_peaks, file = "./01_input/201019_annotatedPeaks.csv")
+library(GenomicRanges)
+elt2_peaks <- as.data.frame(mcols(readRDS("/Users/rtpw/Dropbox/01_GITHUBREPO/RWC23_elt2_regulated_genes/01_ChIPseq_RNAseq_Integration/01_input/201109_annotatedPeaks.rds")))
 
-elt2_peaks$cluster.description <-
-  factor(
-    elt2_peaks$cluster.description,
-    levels = c(
-      "Embryo_Specific",
-      "Larval",
-      "Increasing",
-      "L3_High",
-      "Not_Changing"
-    )
-  )
+elt2_peaks <- elt2_peaks %>% rename(cluster.description = k4labels, WBGeneID = feature)
 
 elt2_cluster_names <- c("Embryo_Specific",
                         "Larval",
@@ -201,7 +194,26 @@ elt2_cluster_names <- c("Embryo_Specific",
                         "L3_High",
                         "Not_Changing")
 
+elt2_peaks$cluster.description <-
+  factor(
+    elt2_peaks$cluster.description,
+    levels = c(
+      "LE-specific",
+      "Post-embryonic",
+      "Increasing",
+      "L3-high",
+      "Not-changing or not IDR-passing"
+    ),
+    labels = elt2_cluster_names
+  )
+
 elt2_peaks %>% head
+```
+
+Output the number of ELT-2 peaks within each binding class.
+
+```{r}
+table(mcols(readRDS(file = "./01_input/201109_annotatedPeaks.rds"))$k4labels)
 ```
 
 Make a set of genes with ELT-2 binding detected in the L1 stage.  
@@ -975,6 +987,23 @@ myggsave(plot = per_cluster_pattern_percent,
 
 # Subset ELT-2/ELT-7 differentially expressed genes based on ELT-2 binding in L1 stage
 
+```{r}
+HA_bound_split <- RNA_heatmap2(
+  dynamic_counts_matrix_scaled_ascend,
+  column_split = RNA_column_order,
+  row_split = elt2_L1_anno$elt2_detected_in_L1
+) + elt2_l1_row_annotation(elt2_L1_anno)
+HA_bound_split
+plot <- TRUE
+if (plot == TRUE){
+  myPDFplot(
+    plot = HA_bound_split,
+    name = "05c_DE_Heatmap_L1elt2bound_split",
+    height = 6.5, width = 6,
+    plotdir = plotdir
+  )
+}
+```
 
 ```{r}
 RNA_heatmap2(
@@ -1019,15 +1048,25 @@ bound_only_sets <-
   )
 head(bound_only_sets)
 ```
+```{r}
+table(bound_only_sets$set)
+```
+
+```{r}
+nrow(bound_only_sets)
+```
+
 
 Draw heatmap and check that set assignment is correct.  
+
+# TODO: FIX SET NAME ASSIGNMENT AND CLUSTER ORDER
 
 ```{r}
 Ha_bound_only <-
   RNA_heatmap2(mat = dynamic_counts_matrix_scaled_bound_only,
               column_split = RNA_column_order,
               row_split = bound_only_sets$set,
-              row_title = c("SET2", "SET3", "SET1", "SET4"))
+              row_title = c("SET1", "SET2", "SET3", "SET4"))
 
 Ha_bound_only
 if (plot == TRUE){
@@ -1039,6 +1078,8 @@ if (plot == TRUE){
   )
 }
 ```
+
+# TODO: ROTATE CLUSTERS TO MAKE SENSE
 
 ```{r}
 Ha_bound_only +
@@ -1551,6 +1592,23 @@ if (plot == TRUE){
 This plot suggests that transcription factors bound by ELT-2 are typically upregulated in the absence of ELT-2. 
 
 TFs to follow up: pqm-1 (intestine), zip-10, odd-1 (repressed by elt-2 alone, normally gut expressed). nhr-58 (vulva), zip-2 (neuron), cebp-1 (neuron), gla-3 (germline), zip-11
+
+# Scratch
+
+```{r}
+# resWtV2 <- read_excel("./01_input/Table_S3_Pairwise_Comparison.xlsx", 
+#     sheet = "2017-07-12_resWtV2", skip = 2)
+# resWtV2
+# 
+# ggplot(elt2_peaks %>% full_join(resWtV2, by = "WBGeneID") %>% filter(L1_IDR == 1, padj >= 0.05) %>% mutate(L1_mean = (L1_1+L1_2)/2), 
+#        aes(x = L1_mean, y = log2FoldChange)
+#            ) +
+#   geom_point() +
+#   geom_smooth(method = lm)
+# 
+
+
+```
 
 
 ## Session Info
