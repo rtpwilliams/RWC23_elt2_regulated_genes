@@ -324,6 +324,9 @@ BoeckRNA_ELT2_chip
 
 
 ```{r BoeckRNA_ELT2_chip}
+library(fpc) # for bootstrapping
+library(vcd) # for mosaic
+
 gene_names <-
   c("flh-3", "elt-7", "clec-258", "pqm-1", "mtl-2", "ets-4", "aat-6")
 
@@ -341,13 +344,18 @@ changing = rowvariances > qthreshold
 BoeckRNA_ELT2_chip_Heatmap(real & changing, sprintf("Log(RNA Timecourse), Variance > %.2f", qthreshold))
 
 data.whole = chip_rna_matrix_scaled[real&changing,]
-hc = hclust(dist(data.whole))
-# plot the hc height to get the scree
+agglom='ward.D2'
+hc = hclust(dist(data.whole), method =agglom )
+# plot the hc height to get the screeplot
 ggplot(NULL, aes(x=length(hc$height):1, y=hc$height)) +
     geom_point() + geom_line() +
-    theme_bw() + labs(title="Scree Plot of hclust", x = "# of clusters", y="Height") + scale_x_continuous(limits=c(1,15)) + scale_y_continuous(limits=c(5,6))
+    theme_bw() + labs(title="Scree Plot of hclust", x = "# of clusters", y="Height") + scale_x_continuous(limits=c(1,15)) 
 
-nclust=8
+# main 2 clusters are stable, 3rd unstable 
+clusterboot( dist(data.whole), clustermethod=disthclustCBI,method=agglom,k=3)
+
+
+nclust=3
 Heatmap(data.whole,
         column_title=sprintf("Log(RNA Timecourse), Variance > %.2f", qthreshold),
         name = "Boeck Time Resolved RNA",
@@ -369,7 +377,8 @@ Heatmap(data.whole,
   )
 hclusters = cutree(hc, nclust)
 tab=table(hclusters, chip_rna_df$cluster.description[real&changing])
-dimnames(tab) <- list("hclusters"=1:nclust, "ELT-2"=levels(chip_rna_df$cluster.description[real&changing]))
+dimnames(tab) <- list("hclusters"=1:nclust, 
+                      "ELT-2"=levels(chip_rna_df$cluster.description[real&changing]))
 mosaic(t(tab),shade=T,
        just_labels="right",
        rot_labels=c(0,0,0,0),
