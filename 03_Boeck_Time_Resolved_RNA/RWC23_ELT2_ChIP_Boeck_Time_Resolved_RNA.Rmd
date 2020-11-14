@@ -339,7 +339,7 @@ increasing = chip_rna_df$cluster.description == "Increasing"
 #changing = rowvariances > 0.1355294 # .05 thresh from chipseq
 
 ### ALL ###
-qthreshold = quantile(rowvariances,.1)
+qthreshold = quantile(rowvariances,.2)
 changing = rowvariances > qthreshold
 BoeckRNA_ELT2_chip_Heatmap(real & changing, sprintf("Log(RNA Timecourse), Variance > %.2f", qthreshold))
 
