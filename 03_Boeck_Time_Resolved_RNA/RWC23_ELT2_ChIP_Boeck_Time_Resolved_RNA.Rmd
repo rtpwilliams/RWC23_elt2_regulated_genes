@@ -348,7 +348,11 @@ ggplot(NULL, aes(x=length(hc$height):1, y=hc$height)) +
     theme_bw() + labs(title="Scree Plot of hclust", x = "# of clusters", y="Height") + scale_x_continuous(limits=c(1,15)) + scale_y_continuous(limits=c(5,6))
 
 nclust=8
-Heatmap(data.whole,cluster_columns = F,row_order=hc$order,row_split=cutree(hc, nclust),show_row_names = F) +
+Heatmap(data.whole,
+        column_title=sprintf("Log(RNA Timecourse), Variance > %.2f", qthreshold),
+        name = "Boeck Time Resolved RNA",
+        cluster_columns = F,
+        row_order=hc$order,row_split=cutree(hc, nclust),show_row_names = F) +
   rowAnnotation(
     ELT2_cluster = chip_rna_df$cluster.description[real&changing],
     col = list(
