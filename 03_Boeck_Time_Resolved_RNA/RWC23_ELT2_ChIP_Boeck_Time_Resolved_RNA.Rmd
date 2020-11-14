@@ -52,7 +52,7 @@ time_resolved_rna <-
   )
 
 paramart <-
-  useMart("parasite_mart_15_merged",
+  useMart("parasite_mart",
           dataset = "wbps_gene",
           host = "https://parasite.wormbase.org",
           port = 443)
@@ -170,11 +170,26 @@ tf_GOI_df <-
 
 
 ```{r}
+
+library(parallelly)
+# cluster analysis
+howmany=2:11
+names(howmany) = howmany
+cl = makeClusterPSOCK(4, outfile=NULL, verbose=T)
+clusterExport(cl, varlist = list("time_resolved_rna_intestine_matrix_scaled_TFONLY"))
+withinSS = parLapply(cl, howmany, function(k){
+  kmeans(time_resolved_rna_intestine_matrix_scaled_TFONLY, as.integer(k))$tot.withinss
+})
+
+stopCluster(cl)
+
+plot(howmany,unlist(withinSS))
+
 Heatmap(
   time_resolved_rna_intestine_matrix_scaled_TFONLY,
   cluster_columns = FALSE,
   show_row_names = FALSE,
-  row_km = 5
+  row_split=6
 ) +
   rowAnnotation(foo = anno_mark(at = tf_GOI_df$index,
                                 labels = tf_GOI_df$name.y))
@@ -321,9 +336,45 @@ increasing = chip_rna_df$cluster.description == "Increasing"
 #changing = rowvariances > 0.1355294 # .05 thresh from chipseq
 
 ### ALL ###
-changing = rowvariances > 1
-BoeckRNA_ELT2_chip_Heatmap(real & changing, "Log(RNA Timecourse), No threshold on variance")
+qthreshold = quantile(rowvariances,.1)
+changing = rowvariances > qthreshold
+BoeckRNA_ELT2_chip_Heatmap(real & changing, sprintf("Log(RNA Timecourse), Variance > %.2f", qthreshold))
 
+data.whole = chip_rna_matrix_scaled[real&changing,]
+hc = hclust(dist(data.whole))
+# plot the hc height to get the scree
+ggplot(NULL, aes(x=length(hc$height):1, y=hc$height)) +
+    geom_point() + geom_line() +
+    theme_bw() + labs(title="Scree Plot of hclust", x = "# of clusters", y="Height") + scale_x_continuous(limits=c(1,15)) + scale_y_continuous(limits=c(5,6))
+
+nclust=8
+Heatmap(data.whole,cluster_columns = F,row_order=hc$order,row_split=cutree(hc, nclust),show_row_names = F) +
+  rowAnnotation(
+    ELT2_cluster = chip_rna_df$cluster.description[real&changing],
+    col = list(
+      ELT2_cluster = c(
+        "Embryo_Specific" = "#7570B3",
+        "Larval" = "#1B9E77",
+        "Increasing" = "#E7298A",
+        "L3_High" = "#D95F02",
+        "Not_Changing" = "#505050",
+        "Not_Bound" = "yellow"
+      )
+    ),
+    border = TRUE
+  )
+hclusters = cutree(hc, nclust)
+tab=table(hclusters, chip_rna_df$cluster.description[real&changing])
+dimnames(tab) <- list("hclusters"=1:nclust, "ELT-2"=levels(chip_rna_df$cluster.description[real&changing]))
+mosaic(t(tab),shade=T,
+       just_labels="right",
+       rot_labels=c(0,0,0,0),
+       offset_label=c(0,0,0,-.5),
+       main  ="Time Resolved RNA associates with some \nELT-2 peak clusters")
+
+```
+
+```{r zoom-ins}
 gene_names=rownames(chip_rna_matrix_scaled)[real & changing & embryo_specific]
 (BoeckRNA_ELT2_chip_Heatmap(real & changing & embryo_specific, "Log(RNA Timecourse), No threshold on variance",row_split=2)->emb)
 pdf(file="embryo.pdf",height=10.5,width=10.5)
