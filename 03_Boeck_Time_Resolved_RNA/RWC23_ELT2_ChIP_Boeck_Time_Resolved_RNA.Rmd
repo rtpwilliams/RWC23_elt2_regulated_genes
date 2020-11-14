@@ -4,6 +4,8 @@ output:
   pdf_document: default
   html_document:
     df_print: paged
+  word_document:
+    keep_md: true
 ---
 
 ```{r setup, include=FALSE}
@@ -43,7 +45,7 @@ Pseudocode:
 
 # Import Time-resolved RNA
 
-```{r}
+```{r data, cache=TRUE}
 time_resolved_rna <-
   read.delim(
     "../02_Public_Intesine_RNA/01_input/9_Boeck_et_al_2016_time-resolved_transcriptome/Unified_dcpm_per_wormbase_gene.txt",
@@ -170,20 +172,6 @@ tf_GOI_df <-
 
 
 ```{r}
-
-library(parallelly)
-# cluster analysis
-howmany=2:11
-names(howmany) = howmany
-cl = makeClusterPSOCK(4, outfile=NULL, verbose=T)
-clusterExport(cl, varlist = list("time_resolved_rna_intestine_matrix_scaled_TFONLY"))
-withinSS = parLapply(cl, howmany, function(k){
-  kmeans(time_resolved_rna_intestine_matrix_scaled_TFONLY, as.integer(k))$tot.withinss
-})
-
-stopCluster(cl)
-
-plot(howmany,unlist(withinSS))
 
 Heatmap(
   time_resolved_rna_intestine_matrix_scaled_TFONLY,
@@ -351,11 +339,15 @@ ggplot(NULL, aes(x=length(hc$height):1, y=hc$height)) +
     geom_point() + geom_line() +
     theme_bw() + labs(title="Scree Plot of hclust", x = "# of clusters", y="Height") + scale_x_continuous(limits=c(1,15)) 
 
-# main 2 clusters are stable, 3rd unstable 
-clusterboot( dist(data.whole), clustermethod=disthclustCBI,method=agglom,k=3)
-
-
 nclust=3
+# main 2 clusters are stable, 3rd unstable 
+set.seed(5)
+clusterboot( dist(data.whole), clustermethod=disthclustCBI,method=agglom,k=nclust)
+
+subsetrows=real&changing
+ix=which(rownames(chip_rna_matrix_scaled)[subsetrows] %in% gene_names)
+  chip_GOI_df = data.frame(name=rownames(chip_rna_matrix_scaled)[subsetrows][ix], index=ix)
+
 Heatmap(data.whole,
         column_title=sprintf("Log(RNA Timecourse), Variance > %.2f", qthreshold),
         name = "Boeck Time Resolved RNA",
@@ -374,7 +366,8 @@ Heatmap(data.whole,
       )
     ),
     border = TRUE
-  )
+  )+  rowAnnotation(foo = anno_mark(at = chip_GOI_df$index,
+                               labels = chip_GOI_df$name))
 hclusters = cutree(hc, nclust)
 tab=table(hclusters, chip_rna_df$cluster.description[real&changing])
 dimnames(tab) <- list("hclusters"=1:nclust, 
@@ -415,46 +408,3 @@ dev.off()
 
 ```
 
-```{r cluster comparisons and other exploration}
-### Exclude the least changing, lower 5% of variance ###
-changing = rowvariances > quantile(rowvariances,.05)
-
-BoeckRNA_ELT2_chip_Heatmap(real & changing, "Log(RNA Timecourse), Exclude lower 5% variance")
-
-for (clustering_method in c("ward.D", "ward.D2", "single", "complete", "average", "mcquitty", "median", "centroid" )){
-    BoeckRNA_ELT2_chip_Heatmap(real & changing,
-                               sprintf("%s, Exclude lower 5%% variance",
-                                       toupper(clustering_method)),
-                               clustering_method_rows = clustering_method)-> plottedHM
-    print(plottedHM)
-}
-
-
-BoeckRNA_ELT2_chip_Heatmap(real & changing & embryo_specific, "Log(RNA Timecourse), Exclude lower 5% variance")
-
-### Include only rows with a variance greater than 1 ###
-changing = rowvariances > 1
-
-for (clustering_method in c("ward.D", "ward.D2", "single", "complete", "average", "mcquitty", "median", "centroid" )){
-    BoeckRNA_ELT2_chip_Heatmap(real & changing,
-                               sprintf("Euclidean, %s, variance > 1 (top 20%% data)",
-                                       toupper(clustering_method)),
-                               clustering_method_rows = clustering_method)-> plottedHM
-    print(plottedHM)
-        BoeckRNA_ELT2_chip_Heatmap(real & changing,
-                               sprintf("Gower, %s, variance > 1 (top 20%% data)",
-                                       toupper(clustering_method)),
-                               clustering_method_rows = clustering_method,
-                               clustering_distance_rows = function(x){daisy(x,"gower")}
-                               )-> plottedHM
-    print(plottedHM)
-}
-
-
-
-
-# pdf(file = "./03_plots/201008_Boeck_RNA_ELT2ChIP_Patterns_Subset.pdf", 
-#     width = 7, height = 7)
-# BoeckRNA_ELT2_chip
-# dev.off()
-```
