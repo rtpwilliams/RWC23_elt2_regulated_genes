@@ -18,6 +18,8 @@ Install libraries
 
 ```{r}
 # fill this in
+# install.packages("fpc")
+# install.packages("vcd")
 ```
 
 Note: you must load `biomaRt` before loading `tidyverse`

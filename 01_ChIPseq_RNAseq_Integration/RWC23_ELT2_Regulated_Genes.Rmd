@@ -184,9 +184,11 @@ dineen_nishimura_sets_ascend %>% head
 # temp_peaks <- mcols(readRDS("/Users/rtpw/Dropbox/01_GITHUBREPO/RWC23_elt2_regulated_genes/01_ChIPseq_RNAseq_Integration/01_input/201019_annotatedPeaks.rds"))
 # write.csv(temp_peaks, file = "./01_input/201019_annotatedPeaks.csv")
 library(GenomicRanges)
-elt2_peaks <- as.data.frame(mcols(readRDS("/Users/rtpw/Dropbox/01_GITHUBREPO/RWC23_elt2_regulated_genes/01_ChIPseq_RNAseq_Integration/01_input/201109_annotatedPeaks.rds")))
+elt2_peaks <- as.data.frame(mcols(readRDS("./01_input/201109_annotatedPeaks.rds")))
 
 elt2_peaks <- elt2_peaks %>% rename(cluster.description = k4labels, WBGeneID = feature)
+# use this to rename the columns when knitting
+# elt2_peaks <- elt2_peaks %>% rename(k4labels = "cluster.description", feature = "WBGeneID")
 
 elt2_cluster_names <- c("Embryo_Specific",
                         "Larval",

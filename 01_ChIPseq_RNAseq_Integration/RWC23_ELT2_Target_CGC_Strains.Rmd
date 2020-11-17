@@ -54,7 +54,7 @@ variance_per_gene <- getBM(
 ) %>% inner_join(variance_per_gene, by = c("wbps_gene_id" = "WBGeneID"))
 
 variance_per_gene %>% mutate(cgc_count = 
-                               sum(str_count(cgc_strains_df$string, pattern = "elt-2"))
+                               sum(str_count(cgc_strains_df$string, pattern = "gfp"))
                              ) %>% arrange(desc(cgc_count))
 
 cgc_count_column <- c()
@@ -64,6 +64,7 @@ for (i in variance_per_gene$external_gene_id){
 }
 
 variance_per_gene <- variance_per_gene %>% mutate(cgc_count = cgc_count_column)
+variance_per_gene%>% head
 ```
 
 SET descriptions do not apply now, sets changed with rematting of L1 peaks to genes
@@ -129,49 +130,45 @@ Make a plot with these genes annotated.
 "cebp-1", "him-4"
 
 ```{r}
+sapply(c(1:nrow(genes_to_test)),
+       function(x){which(rownames(dynamic_counts_matrix_scaled_bound_only) == genes_to_test$wbps_gene_id[x])}
+)
 
-genes_to_test <- variance_per_gene %>% filter(external_gene_id %in% c("ets-4", "cebp-1", "him-4", "mtl-2", "pqm-1")) %>% select(wbps_gene_id, external_gene_id)
+```
+
+
+```{r}
+
+genes_to_test <- variance_per_gene %>% filter(external_gene_id %in% c("ets-4", "cebp-1", "mtl-2", "pqm-1")) %>% select(wbps_gene_id, external_gene_id)
 
 Ha_bound_only_test_gene <- Ha_bound_only +
   rowAnnotation(foo = anno_mark(
-    at = c(
-      which(
-        rownames(dynamic_counts_matrix_scaled_bound_only) == genes_to_test$wbps_gene_id[1]
-      ),
-      which(
-        rownames(dynamic_counts_matrix_scaled_bound_only) == genes_to_test$wbps_gene_id[2]
-      ),
-      which(
-        rownames(dynamic_counts_matrix_scaled_bound_only) == genes_to_test$wbps_gene_id[3]
-      ),
-      which(
-        rownames(dynamic_counts_matrix_scaled_bound_only) == genes_to_test$wbps_gene_id[4]
-      ),
-      which(
-        rownames(dynamic_counts_matrix_scaled_bound_only) == genes_to_test$wbps_gene_id[5]
-      )
-    ),
+    at = sapply(c(1:nrow(genes_to_test)),
+                function(x) {
+                  which(
+                    rownames(dynamic_counts_matrix_scaled_bound_only) == genes_to_test$wbps_gene_id[x]
+                  )
+                }),
     labels = genes_to_test$external_gene_id
   ))
 
 Ha_bound_only_test_gene
 
-# pdf(file = "./03_plots/200729_ELT2_DE_Genes_ELT2bound_Test_Genes_Annotated.pdf", width = 5, height = 5)
-# Ha_bound_only_test_gene
-# dev.off()
+pdf(file = "./03_plots/16_ELT2_DE_Genes_ELT2bound_Test_Genes_Annotated_20-11-10.pdf", width = 5, height = 5)
+Ha_bound_only_test_gene
+dev.off()
 ```
 
 ```{r}
 write_csv(
-  (variance_per_gene %>% select(wbps_gene_id) %>% rename("Wormbase ID" = wbps_gene_id)),"./02_output/all_DE_genes.csv")
+  (variance_per_gene %>% select(wbps_gene_id) %>% rename(wbps_gene_id = "Wormbase ID")),"./02_output/all_DE_genes.csv")
 write_csv(
-  (variance_per_gene %>% filter(set == "SET1") %>% select(wbps_gene_id) %>% rename("Wormbase ID" = wbps_gene_id)),"./02_output/set1_DE_genes.csv")
+  (variance_per_gene %>% filter(set == "SET1") %>% select(wbps_gene_id) %>% rename(wbps_gene_id = "Wormbase ID")),"./02_output/set1_DE_genes.csv")
 write_csv(
-  (variance_per_gene %>% filter(set == "SET2") %>% select(wbps_gene_id) %>% rename("Wormbase ID" = wbps_gene_id)),"./02_output/set2_DE_genes.csv")
+  (variance_per_gene %>% filter(set == "SET2") %>% select(wbps_gene_id) %>% rename(wbps_gene_id = "Wormbase ID")),"./02_output/set2_DE_genes.csv")
 write_csv(
-  (variance_per_gene %>% filter(set == "SET3") %>% select(wbps_gene_id) %>% rename("Wormbase ID" = wbps_gene_id)),"./02_output/set3_DE_genes.csv")
+  (variance_per_gene %>% filter(set == "SET3") %>% select(wbps_gene_id) %>% rename(wbps_gene_id = "Wormbase ID")),"./02_output/set3_DE_genes.csv")
 write_csv(
-  (variance_per_gene %>% filter(set == "SET4") %>% select(wbps_gene_id) %>% rename("Wormbase ID" = wbps_gene_id)),"./02_output/set4_DE_genes.csv")
-
+  (variance_per_gene %>% filter(set == "SET4") %>% select(wbps_gene_id) %>% rename(wbps_gene_id = "Wormbase ID")),"./02_output/set4_DE_genes.csv")
 ```
 

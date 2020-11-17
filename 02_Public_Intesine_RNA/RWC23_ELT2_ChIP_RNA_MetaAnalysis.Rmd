@@ -270,7 +270,8 @@ dim(intestine_gene_list)
 Write output files
 
 ```{r}
-# write_csv(intestine_gene_list, "./02_output/RWC23_Public_Intestine_RNA_Data.csv")
-# write_csv(RWC23_Metadata[-1,], "./02_output/RWC23_Public_Intestine_RNA_Metadata.csv")
+write_csv(intestine_gene_list, "./02_output/RWC23_Public_Intestine_RNA_Data.csv")
+write_csv(RWC23_Metadata[-1,], "./02_output/RWC23_Public_Intestine_RNA_Metadata.csv")
+getwd()
 ```
 
