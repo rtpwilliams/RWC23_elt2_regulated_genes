@@ -374,6 +374,7 @@ hclusters = cutree(hc, nclust)
 tab=table(hclusters, chip_rna_df$cluster.description[real&changing])
 dimnames(tab) <- list("hclusters"=1:nclust, 
                       "ELT-2"=levels(chip_rna_df$cluster.description[real&changing]))
+dimnames(tab)
 mosaic(t(tab),shade=T,
        just_labels="right",
        rot_labels=c(0,0,0,0),

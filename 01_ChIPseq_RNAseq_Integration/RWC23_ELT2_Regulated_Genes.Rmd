@@ -184,11 +184,12 @@ dineen_nishimura_sets_ascend %>% head
 # temp_peaks <- mcols(readRDS("/Users/rtpw/Dropbox/01_GITHUBREPO/RWC23_elt2_regulated_genes/01_ChIPseq_RNAseq_Integration/01_input/201019_annotatedPeaks.rds"))
 # write.csv(temp_peaks, file = "./01_input/201019_annotatedPeaks.csv")
 library(GenomicRanges)
+elt2_GRange <- readRDS("./01_input/201109_annotatedPeaks.rds")
 elt2_peaks <- as.data.frame(mcols(readRDS("./01_input/201109_annotatedPeaks.rds")))
 
-elt2_peaks <- elt2_peaks %>% rename(cluster.description = k4labels, WBGeneID = feature)
+# elt2_peaks <- elt2_peaks %>% rename(cluster.description = k4labels, WBGeneID = feature)
 # use this to rename the columns when knitting
-# elt2_peaks <- elt2_peaks %>% rename(k4labels = "cluster.description", feature = "WBGeneID")
+elt2_peaks <- elt2_peaks %>% rename(k4labels = "cluster.description", feature = "WBGeneID")
 
 elt2_cluster_names <- c("Embryo_Specific",
                         "Larval",
@@ -996,7 +997,7 @@ HA_bound_split <- RNA_heatmap2(
   row_split = elt2_L1_anno$elt2_detected_in_L1
 ) + elt2_l1_row_annotation(elt2_L1_anno)
 HA_bound_split
-plot <- TRUE
+
 if (plot == TRUE){
   myPDFplot(
     plot = HA_bound_split,
@@ -1611,6 +1612,91 @@ TFs to follow up: pqm-1 (intestine), zip-10, odd-1 (repressed by elt-2 alone, no
 
 
 ```
+
+```{r Measure_Association}
+library(fpc) # for bootstrapping
+library(vcd) # for mosaic
+
+dynamic_counts_matrix_scaled_ascend
+
+chip_annotation[1,]
+
+elt2_cluster_representative <- c(rep("not bound", nrow(exprclust_bindclust)))
+elt2_cluster_representative[exprclust_bindclust$Not_Changing == "present"] <- "Not_Changing"
+elt2_cluster_representative[exprclust_bindclust$Embryo_Specific == "present"] <- "Embryo_Specific"
+elt2_cluster_representative[exprclust_bindclust$L3_High == "present"] <- "L3_High"
+elt2_cluster_representative[exprclust_bindclust$Larval == "present"] <- "Larval"
+elt2_cluster_representative[exprclust_bindclust$Increasing == "present"] <- "Increasing"
+
+tableformosaic <- table(exprclust_bindclust$set, elt2_cluster_representative)
+dimnames(tableformosaic) <- list("dinneners" = paste("SET", 1:6, sep = ""), " " = c("Embryo_Specific","Increasing","L3_High","Larval","not bound","Not_Changing"))
+dimnames(tableformosaic)
+tableformosaic
+```
+```{r}
+ggplot()
+
+class(chisq.test(tableformosaic)$residuals)
+```
+
+```{r}
+chisq.test(tableformosaic)$residuals
+```
+
+
+```{r Measure_Association}
+mosaic(t(tableformosaic),shade=T,
+       just_labels="right",
+       rot_labels=c(0,0,0,0),
+       offset_label=c(0,0,0,-.5),
+       main  ="pee pee poo poo")
+```
+
+```{r}
+library(corrplot)
+corrplot(
+  chisq.test(tableformosaic, simulate.p.value = TRUE)$residuals,
+  is.cor = FALSE,
+  cl.ratio = 0.35,
+  cl.align = "r",
+  tl.col = "black",
+  tl.cex = 1,
+  tl.srt = 45
+)
+
+pdf(file = "./03_plots/17_Dineensets_vs_elt2sets_pearsonresiduals.pdf")
+corrplot(
+    chisq.test(tableformosaic, simulate.p.value = TRUE)$residuals,
+    is.cor = FALSE,
+    cl.ratio = 0.35,
+    cl.align = "r",
+    tl.col = "black",
+    tl.cex = 1,
+    tl.srt = 45
+  )
+dev.off()
+```
+
+```{r}
+  corrplot(
+    chisq.test(tableformosaic, simulate.p.value = TRUE)$stdres,
+    is.cor = FALSE,
+    cl.ratio = 0.35,
+    cl.align = "r",
+    tl.col = "black",
+    tl.cex = 1,
+    tl.srt = 45
+  )
+```
+
+
+contingency table of L1 stage binding bound not bound then pearson residuals plot
+
+```{r}
+
+```
+
+
 
 
 ## Session Info

@@ -1,0 +1,270 @@
+---
+title: "RWC23_meme-chip"
+author: "RTPW"
+date: "11/25/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Analysis goal:
+for the 6 sets of gene expression patterns from the genes differentially expressed in all pairwise comparisons of WT, elt-7(-), elt-2(-) and elt-2(-);elt-7(-) 
+  - Perform differential meme-chip analysis  
+  - Perform differentiall gene ontology analysis
+
+- Input: GRanges object from analysis performed in `RWC23_ELT2_Regulated_Genes.Rmd` that includes SET ID (1-6) of all differentially expressed genes and Class ID (A-C) of L1 stage bound differentially expressed genes
+- Merge GRanges from makeGRangesFromNarrowPeak for LE, L1 and L3 stages to get peak summit
+- Determine +/- 250 bp range around peak summit for meme-chip input
+- Use `getSeq` function from Biostrings package, retaining set information.
+- Retrieve corresponding DNA sequences with query of BSgenome object with genomic ranges from Biostring output
+
+# Genome regions for meme-chip
+
+```{r}
+library(tidyverse)
+BiocManager::install("GenomicRanges")
+# elt2_GRange <- readRDS("../../onish_ChIP_R_Analysis/peak_summit_GRange.RDS")
+elt2_GRange <- readRDS("../../onish_ChIP_R_Analysis/annotatedPeaks.rds")
+elt2_GRange
+elt2_df <- as.data.frame(elt2_GRange)
+
+dineen_set_summit <- elt2_df %>% full_join(dineen_nishimura_sets_ascend, by = c("feature" = "WBGeneID")) %>% filter(!is.na(set)) %>% select(seqnames:end, name, feature, set, LE_summit:L3_summit) %>% rowwise() %>% mutate(peak_summit = round(mean(c(LE_summit, L1_summit, L3_summit), na.rm = TRUE))) %>% mutate(summit_start = start + peak_summit - 250, summit_end = start + peak_summit + 250, peak_width = summit_end - summit_start) %>% filter(!is.na(seqnames))
+dineen_set_summit
+```
+
+
+Turn into GenomicRanges object
+```{r}
+chroms <- Seqinfo(c('chrI', 'chrII', 'chrIII', 'chrIV', 'chrV', 'chrX', 'chrM'),
+                    c(15072434, 15279421, 13783801, 17493829, 20924180, 17718942, 13794),
+                    c(rep(FALSE,6), TRUE),
+                    rep("ce11",7))
+
+dineen_GRange <- trim(makeGRangesFromDataFrame(dineen_set_summit,
+                         keep.extra.columns = FALSE,
+                         ignore.strand = TRUE,
+                         start.field = "summit_start",
+                         end.field = "summit_end",
+                         seqinfo = chroms,
+                         starts.in.df.are.0based = T,
+                         ))
+dineen_GRange$dineen_set <- dineen_set_summit$set
+dineen_GRange$feature <- dineen_set_summit$feature
+dineen_GRange$name <- dineen_set_summit$name
+names(dineen_GRange) <- dineen_set_summit$name
+dineen_GRange
+```
+
+Get DNA sequences
+
+```{r}
+getwd()
+#BiocManager::install("Biostrings")
+# BiocManager::install("BSgenome.Celegans.UCSC.ce11")
+library(Biostrings)e
+library(BSgenome.Celegans.UCSC.ce11)
+getSeq(Celegans, dineen_GRange)
+export(getSeq(Celegans, dineen_GRange), "01_input/dineen_all_sets_peaks.fasta")
+```
+
+subset based on dineen sets and get DNA sequences
+
+```{r}
+dineen_GRange[elementMetadata(dineen_GRange)[,"dineen_set"] == "SET1"]
+export(getSeq(Celegans, dineen_GRange[elementMetadata(dineen_GRange)[,"dineen_set"] == "SET1"]), "dineen_SET1_peaks.fasta")
+setnames <- paste(rep("SET", 6), 1:6, sep = "")
+for(set in setnames){
+  filename <- paste("01_input/dineen_", set, "_peaks.fasta", sep = "")
+  export(getSeq(Celegans, dineen_GRange[elementMetadata(dineen_GRange)[,"dineen_set"] == set]), filename)
+}
+
+```
+
+Use MEME-Suite docker image to identify motifs within binding sites
+
+```{bash}
+# cd 01_input
+#docker run -v $(pwd):/home/meme --user $(id -u):$(id -g) memesuite/memesuite ls -lrtha 01_input
+echo "all_dineen_sets_peaks.fasta" > description
+OUTDIR="02_output"
+SET="all_dineen_sets_peaks"
+docker run -v $(pwd):/home/meme --user $(id -u):$(id -g) memesuite/memesuite meme-chip -oc $OUTDIR/$SET -time 300 -ccut 100 -fdesc description -order 1 -db motif_databases/CIS-BP/Caenorhabditis_elegans.meme -meme-mod zoops -meme-minw 6 -meme-maxw 30 -meme-nmotifs 3 -meme-searchsize 100000 -dreme-e 0.05 -centrimo-score 5.0 -centrimo-ethresh 10.0 01_input/all_dineen_sets_peaks.fasta
+```
+
+
+### GO data and processing functions
+
+subset based on dineen sets and get WBGeneIDs
+
+```{r}
+write.table(as.data.frame(mcols(dineen_GRange)) %>% rownames_to_column() %>% select(feature),
+            file = "dineen_allset_WBGeneID.csv", col.names = FALSE, row.names = FALSE)
+
+tmp <- as.data.frame(mcols(dineen_GRange)) %>% rownames_to_column() %>% filter(dineen_set == "SET1") %>% select(feature)
+write.table(tmp$feature, file = "dineen_SET1_WBGeneID.csv", col.names = FALSE, row.names = FALSE)
+```
+
+Data is from paramart, the functions are necessary to make the topGO analysis easier to repeat across the clusters.
+
+```{r GO Functions, echo=FALSE, cache=TRUE}
+# get the annotations from PARASITE
+library(biomaRt)
+if (! "paramart" %in% ls()) {
+  system.time({paramart <- useMart("parasite_mart", dataset = "wbps_gene", host = "https://parasite.wormbase.org", port = 443)})}
+if (! "WORMGO" %in% ls()) {
+  # go to https://parasite.wormbase.org/biomart/martview/ to figure out the values to use for this
+  system.time({WORMGO = biomaRt::getBM(
+    mart = paramart,
+    filter = "species_id_1010",
+    value = "caelegprjna13758",
+    attributes = c(
+      "wbps_gene_id",
+      "external_gene_id",
+      "go_accession",
+      "go_name_1006",
+      "go_linkage_type"
+    )
+  )}) 
+}
+
+# create an object where you can access all the GO terms that are assigned to a specific gene
+geneID2GO <- by(WORMGO$go_accession, WORMGO$wbps_gene_id, function(x) as.character(x))
+GOSummary<- function(GOdata, topNodes = 200) {
+  
+  resultClassic <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+  resultElim <- runTest(GOdata, algorithm = "weight01", statistic = "fisher")
+  
+  GenTable(
+    object=GOdata, 
+    classicFisher = resultClassic,
+    elim=resultElim,    
+    orderBy="elim",
+    topNodes = topNodes
+  ) -> tab
+  # not sure where the conversion to char is happening. convert back
+  tab$classicFisher = as.numeric(tab$classicFisher)
+  tab$elim = as.numeric(tab$elim)
+  return(tab)
+}
+mkGO = function(foreground_genes, background_genes) {
+  # create a TRUE/FALSE list the size of background genes, TRUE if in foreground
+  geneList = factor(as.integer(background_genes %in% foreground_genes))
+  names(geneList) = background_genes
+  BP.go = new("topGOdata", ontology='BP'
+              , allGenes = geneList
+              , annot = annFUN.gene2GO
+              , gene2GO = geneID2GO)
+  MF.go = new("topGOdata", ontology='MF'
+              , allGenes = geneList
+              , annot = annFUN.gene2GO
+              , gene2GO = geneID2GO)
+  CC.go = new("topGOdata", ontology='CC'
+              , allGenes = geneList
+              , annot = annFUN.gene2GO
+              , gene2GO = geneID2GO)
+  list(BP=BP.go,CC=CC.go,MF=MF.go)
+}
+
+```
+
+### Perform GO-term enrichment analyses
+
+Run the topGO analyses using the above functions. 
+
+``` {r GO term analysis, include=FALSE, cache=TRUE}
+# BiocManager::install("topGO")
+library(topGO)
+dineen_all_wbid <- as.data.frame(mcols(dineen_GRange))
+
+dineen_set1_wbid = unique((dineen_set_wbid %>% filter(dineen_set == "SET1"))$feature)
+dineen_set2_wbid = unique((dineen_set_wbid %>% filter(dineen_set == "SET2"))$feature)
+dineen_set3_wbid = unique((dineen_set_wbid %>% filter(dineen_set == "SET3"))$feature)
+dineen_set4_wbid = unique((dineen_set_wbid %>% filter(dineen_set == "SET4"))$feature)
+dineen_set5_wbid = unique((dineen_set_wbid %>% filter(dineen_set == "SET5"))$feature)
+dineen_set6_wbid = unique((dineen_set_wbid %>% filter(dineen_set == "SET6"))$feature)
+
+unique.dineen.wbid = unique(dineen_all_wbid$feature)
+all.genes <- unique(as.character(WORMGO$wbps_gene_id))
+all.GO = mkGO(unique.dineen.wbid, all.genes)
+
+omigod = list()
+genelists = list(
+  # all=list(fore=unique.dineen.wbid, back=dineen_all_wbid$feature), this set doesn't like to work?
+  SET1=list(fore=dineen_set1_wbid, back=unique.dineen.wbid),
+  SET2=list(fore=dineen_set2_wbid, back=unique.dineen.wbid),
+  SET3=list(fore=dineen_set3_wbid, back=unique.dineen.wbid),
+  SET4=list(fore=dineen_set4_wbid, back=unique.dineen.wbid),
+  SET5=list(fore=dineen_set5_wbid, back=unique.dineen.wbid),
+  SET6=list(fore=dineen_set6_wbid, back=unique.dineen.wbid))
+
+omigod = lapply(genelists, function(set_genelist) {
+  length(set_genelist)
+      dataset = mkGO(set_genelist$fore, set_genelist$back)
+      BP.tab = GOSummary(dataset$BP) %>% filter(elim < .05) %>% arrange(elim) %>% mutate(DB="BP")
+      CC.tab = GOSummary(dataset$CC) %>% filter(elim < .05) %>% arrange(elim) %>% mutate(DB="CC")
+      MF.tab = GOSummary(dataset$MF) %>% filter(elim < .05) %>% arrange(elim) %>% mutate(DB="MF")
+      return(rbind(BP.tab, CC.tab, MF.tab))
+  })
+      
+# #library(parallelly)
+# # cl <- makeClusterPSOCK(4) 
+# clusterExport(cl, list("GOSummary","unique.dineen.wbid","mkGO","geneID2GO"))
+# system.time({
+#   omigod = parLapply(cl, genelists, function(set_genelist) {
+#       library(dplyr,quietly = T,warn.conflicts = F)
+#       library(topGO,quietly = T,warn.conflicts = F)
+#       dataset = mkGO(set_genelist$fore, set_genelist$back)
+#       BP.tab = GOSummary(dataset$BP) %>% filter(elim < .05) %>% arrange(elim) %>% mutate(DB="BP")
+#       CC.tab = GOSummary(dataset$CC) %>% filter(elim < .05) %>% arrange(elim) %>% mutate(DB="CC")
+#       MF.tab = GOSummary(dataset$MF) %>% filter(elim < .05) %>% arrange(elim) %>% mutate(DB="MF")
+#       return(rbind(BP.tab, CC.tab, MF.tab))
+#   })
+# })
+# stopCluster(cl)
+```
+
+### Output GO term enrichment results. Also, write files to paste into Revigo analysis, which collapses terms.
+
+Paste output two-column files (GO-term p-like-value) into the form at. http://revigo.irb.hr/index.jsp
+
+
+``` {r GO output, echo=FALSE}
+library(knitr)
+library(dplyr)
+o=omigod
+howmany_in_kable = 50
+# kable(o[['all']] %>% select(-classicFisher,-'Rank in elim') %>% rename(pval=elim) %>% arrange(pval) %>% head(howmany_in_kable), caption="Dataset versus genome")
+kable(o[['SET1']] %>% select(-classicFisher,-'Rank in elim') %>% rename(pval=elim) %>% arrange(pval) %>% head(howmany_in_kable), caption="SET1 Genes")
+kable(o[['K1']] %>% select(-classicFisher,-'Rank in elim') %>% rename(pval=elim) %>% arrange(pval) %>% head(howmany_in_kable), caption="Embryo cluster versus whole dataset")
+kable(o[['K2']] %>% select(-classicFisher,-'Rank in elim') %>% rename(pval=elim) %>% arrange(pval) %>% head(howmany_in_kable), caption="Larval cluster versus whole dataset")
+kable(o[['K3']] %>% select(-classicFisher,-'Rank in elim') %>% rename(pval=elim) %>% arrange(pval) %>% head(howmany_in_kable), caption="L3 cluster versus whole dataset")
+kable(o[['K4']] %>% select(-classicFisher,-'Rank in elim') %>% rename(pval=elim) %>% arrange(pval) %>% head(howmany_in_kable),
+      caption="Increasing cluster versus whole dataset")
+
+o[['SET1']] %>% dplyr::select(-classicFisher, -"Rank in elim") %>% rename(pval = elim) %>% arrange(pval) %>% head(howmany_in_kable)
+```
+
+```{r}
+o[['SET2']] %>% dplyr::select(-classicFisher, -"Rank in elim") %>% rename(pval = elim) %>% arrange(pval) %>% head(howmany_in_kable)
+```
+
+```{r}
+o[['SET3']] %>% dplyr::select(-classicFisher, -"Rank in elim") %>% rename(pval = elim) %>% arrange(pval) %>% head(howmany_in_kable)
+```
+
+```{r}
+o[['SET4']] %>% dplyr::select(-classicFisher, -"Rank in elim") %>% rename(pval = elim) %>% arrange(pval) %>% head(howmany_in_kable)
+```
+
+```{r}
+o[['SET5']] %>% dplyr::select(-classicFisher, -"Rank in elim") %>% rename(pval = elim) %>% arrange(pval) %>% head(howmany_in_kable)
+```
+
+```{r}
+o[['SET6']] %>% dplyr::select(-classicFisher, -"Rank in elim") %>% rename(pval = elim) %>% arrange(pval) %>% head(howmany_in_kable)
+```
+
+
+
