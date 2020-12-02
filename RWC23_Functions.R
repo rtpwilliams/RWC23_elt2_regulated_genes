@@ -166,7 +166,8 @@ RNA_heatmap2 <- function(mat, column_split = NULL, row_title = NULL, row_split =
     column_names_gp = gpar(cex = 0.7),
     heatmap_legend_param = list(color_bar = "continuous"),
     row_split = row_split,
-    row_title = row_title,
+    cluster_row_slices = FALSE,
+    # row_title = row_title,
     column_title = NULL,
     column_split = column_split,
     bottom_annotation = HeatmapAnnotation(
