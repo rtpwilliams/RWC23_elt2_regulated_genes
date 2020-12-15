@@ -318,7 +318,30 @@ library(fpc) # for bootstrapping
 library(vcd) # for mosaic
 
 gene_names <-
-  c("flh-3", "elt-7", "clec-258", "pqm-1", "mtl-2", "ets-4", "aat-6")
+  c(
+    "flh-3",
+    "elt-7",
+    "clec-258",
+    "pqm-1",
+    "mtl-2",
+    "ets-4",
+    "aat-6",
+    "sre-23",
+    "Y45F10B.59",
+    "zmp-2",
+    "F08G5.3",
+    "Y113G7B.11",
+    "F40F9.10",
+    "coel-1",
+    "T25D10.4",
+    "M88.4",
+    "bcl-11",
+    "clec-44",
+    "lin-48",
+    "K01F9.2"
+  )
+
+# gene_names <- c("sre-23", "Y45F10B.59", "zmp-2", "F08G5.3", "Y113G7B.11", "F40F9.10", "coel-1", "T25D10.4", "M88.4", "bcl-11")
 
 real = apply(chip_rna_matrix_scaled, 1, function(x) { ! any(is.na(x)) }) # NA's introduced by log transform don't jive here
 embryo_specific = chip_rna_df$cluster.description == "Embryo_Specific"
@@ -343,8 +366,8 @@ ggplot(NULL, aes(x=length(hc$height):1, y=hc$height)) +
 
 nclust=3
 # main 2 clusters are stable, 3rd unstable 
-set.seed(5)
-clusterboot( dist(data.whole), clustermethod=disthclustCBI,method=agglom,k=nclust)
+# set.seed(5)
+# clusterboot( dist(data.whole), clustermethod=disthclustCBI,method=agglom,k=nclust)
 
 subsetrows=real&changing
 ix=which(rownames(chip_rna_matrix_scaled)[subsetrows] %in% gene_names)
@@ -382,6 +405,20 @@ mosaic(t(tab),shade=T,
        main  ="Time Resolved RNA associates with some \nELT-2 peak clusters")
 
 ```
+
+```{r}
+corrplot(
+  chisq.test(tab, simulate.p.value = TRUE)$stdres,
+  is.corr = FALSE,
+  cl.ratio = 0.35,
+  cl.align = "r",
+  tl.col = "black",
+  tl.cex = 1,
+  tl.srt = 45
+)
+
+```
+
 
 ```{r zoom-ins}
 gene_names=rownames(chip_rna_matrix_scaled)[real & changing & embryo_specific]

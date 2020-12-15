@@ -1043,12 +1043,20 @@ bound_only_elt2_clust_anno %>% head()
 Assign k-means clusters for rows before plotting
 
 ```{r}
+set.seed(421)
 kclus <- kmeans(dynamic_counts_matrix_scaled_bound_only, 4)
 bound_only_sets <-
   data.frame(
     WBGeneID = rownames(dynamic_counts_matrix_scaled_bound_only),
-    set = paste("SET", kclus$cluster, sep = "")
+    set = paste("Class", kclus$cluster, sep = ""),
+    stringsAsFactors = FALSE
   )
+bound_only_sets[bound_only_sets$set == "Class1", "set"] <- "ClassC"
+bound_only_sets[bound_only_sets$set == "Class2", "set"] <- "ClassB"
+bound_only_sets[bound_only_sets$set == "Class3", "set"] <- "ClassA"
+bound_only_sets[bound_only_sets$set == "Class4", "set"] <- "ClassD"
+bound_only_sets
+bound_only_sets$set <- factor(bound_only_sets$set, levels = c("ClassA", "ClassB", "ClassC", "ClassD"))
 head(bound_only_sets)
 ```
 ```{r}
@@ -1062,14 +1070,12 @@ nrow(bound_only_sets)
 
 Draw heatmap and check that set assignment is correct.  
 
-# TODO: FIX SET NAME ASSIGNMENT AND CLUSTER ORDER
 
 ```{r}
 Ha_bound_only <-
   RNA_heatmap2(mat = dynamic_counts_matrix_scaled_bound_only,
               column_split = RNA_column_order,
-              row_split = bound_only_sets$set,
-              row_title = c("SET1", "SET2", "SET3", "SET4"))
+              row_split = bound_only_sets$set)
 
 Ha_bound_only
 if (plot == TRUE){
@@ -1082,7 +1088,7 @@ if (plot == TRUE){
 }
 ```
 
-# TODO: ROTATE CLUSTERS TO MAKE SENSE
+
 
 ```{r}
 Ha_bound_only +
@@ -1687,6 +1693,30 @@ dev.off()
     tl.cex = 1,
     tl.srt = 45
   )
+```
+
+```{r}
+dineen_ELT2_pearson_residuals <-
+  as.data.frame(chisq.test(tableformosaic, simulate.p.value = TRUE)$stdres)
+dineen_ELT2_pearson_residuals <-
+  cbind(dineen_ELT2_pearson_residuals,
+        as.data.frame(chisq.test(tableformosaic, simulate.p.value = TRUE)$observed)$Freq)
+colnames(dineen_ELT2_pearson_residuals) <-
+  c("Dineen_Set", "ELT2_cluster", "Pearson_Residual", "Observed")
+dineen_ELT2_pearson_residuals$Dineen_Set <-
+  factor(
+    dineen_ELT2_pearson_residuals$Dineen_Set,
+    levels = c("SET6", "SET5", "SET4", "SET3", "SET2", "SET1")
+  )
+ggplot(dineen_ELT2_pearson_residuals,
+       aes(x = ELT2_cluster, y = Dineen_Set)) +
+  geom_point(aes(size = Observed, color = Pearson_Residual)) + scale_color_gradient2(
+    high = "red",
+    low = "blue",
+    mid = "white",
+    midpoint = 0
+  ) +
+  theme_bw()
 ```
 
 

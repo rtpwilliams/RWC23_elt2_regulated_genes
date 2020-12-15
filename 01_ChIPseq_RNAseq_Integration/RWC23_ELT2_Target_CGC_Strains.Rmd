@@ -138,8 +138,8 @@ sapply(c(1:nrow(genes_to_test)),
 
 
 ```{r}
-
-genes_to_test <- variance_per_gene %>% filter(external_gene_id %in% c("ets-4", "cebp-1", "mtl-2", "pqm-1")) %>% select(wbps_gene_id, external_gene_id)
+library(dplyr)
+genes_to_test <- variance_per_gene %>% filter(external_gene_id %in% c("ets-4", "cebp-1", "mtl-2", "pqm-1", "zip-10")) %>% dplyr::select(wbps_gene_id, external_gene_id)
 
 Ha_bound_only_test_gene <- Ha_bound_only +
   rowAnnotation(foo = anno_mark(
@@ -154,7 +154,7 @@ Ha_bound_only_test_gene <- Ha_bound_only +
 
 Ha_bound_only_test_gene
 
-pdf(file = "./03_plots/16_ELT2_DE_Genes_ELT2bound_Test_Genes_Annotated_20-11-10.pdf", width = 5, height = 5)
+pdf(file = "./03_plots/16_ELT2_DE_Genes_ELT2bound_Test_Genes_Annotated_20-12-11.pdf", width = 5, height = 5)
 Ha_bound_only_test_gene
 dev.off()
 ```
