@@ -10,27 +10,65 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 Analysis goal:
-for the 6 sets of gene expression patterns from the genes differentially expressed in all pairwise comparisons of WT, elt-7(-), elt-2(-) and elt-2(-);elt-7(-) 
+For the 6 sets of gene expression patterns from the genes differentially expressed in all pairwise comparisons of WT, elt-7(-), elt-2(-) and elt-2(-);elt-7(-) :
+  - Perform differential meme-chip analysis  
+  - Perform differentiall gene ontology analysis
+  
+For the 4 classes of gene expression patterns from the subset of genes bound by ELT-2 and differentially expressed in all pairwise comparisons of WT, elt-7(-), elt-2(-) and elt-2(-);elt-7(-) :
   - Perform differential meme-chip analysis  
   - Perform differentiall gene ontology analysis
 
-- Input: GRanges object from analysis performed in `RWC23_ELT2_Regulated_Genes.Rmd` that includes SET ID (1-6) of all differentially expressed genes and Class ID (A-C) of L1 stage bound differentially expressed genes
+Retrieve DNA seqeunces for meme-chip analysis:
+
+- Input: GRanges object from analysis performed in `RWC23_ELT2_Regulated_Genes.Rmd` that includes SET ID (1-6) of all differentially expressed genes and Class ID (A-D) of L1 stage bound differentially expressed genes
 - Merge GRanges from makeGRangesFromNarrowPeak for LE, L1 and L3 stages to get peak summit
 - Determine +/- 250 bp range around peak summit for meme-chip input
 - Use `getSeq` function from Biostrings package, retaining set information.
 - Retrieve corresponding DNA sequences with query of BSgenome object with genomic ranges from Biostring output
 
-# Genome regions for meme-chip
+Perform Gene Ontology and KEGG Pathway analysis with `clusterProfiler` package.
+
+Install libraries
+
+```{r}
+# BiocManager::install("Biostrings")
+# BiocManager::install("BSgenome.Celegans.UCSC.ce11")
+# BiocManager::install("GenomicRanges")
+# BiocManager::install("clusterProfiler")
+# BiocManager::install("org.Ce.eg.db")
+
+```
+
+Load libraries.  
+Note: dyplr functions such as `select()` will be masked by `org.Ce.eg.db` and require specific call through `dplyr::select()`
 
 ```{r}
 library(tidyverse)
-BiocManager::install("GenomicRanges")
+library(Biostrings)
+library(BSgenome.Celegans.UCSC.ce11)
+library(biomaRt)
+library(clusterProfiler)
+library("org.Ce.eg.db")
+```
+
+# Dineen sets DNA motifs
+
+# Genome regions for meme-chip
+
+```{r}
 # elt2_GRange <- readRDS("../../onish_ChIP_R_Analysis/peak_summit_GRange.RDS")
 elt2_GRange <- readRDS("../../onish_ChIP_R_Analysis/annotatedPeaks.rds")
 elt2_GRange
 elt2_df <- as.data.frame(elt2_GRange)
 
-dineen_set_summit <- elt2_df %>% full_join(dineen_nishimura_sets_ascend, by = c("feature" = "WBGeneID")) %>% filter(!is.na(set)) %>% select(seqnames:end, name, feature, set, LE_summit:L3_summit) %>% rowwise() %>% mutate(peak_summit = round(mean(c(LE_summit, L1_summit, L3_summit), na.rm = TRUE))) %>% mutate(summit_start = start + peak_summit - 250, summit_end = start + peak_summit + 250, peak_width = summit_end - summit_start) %>% filter(!is.na(seqnames))
+dineen_set_summit <-
+  elt2_df %>% full_join(dineen_nishimura_sets_ascend, by = c("feature" = "WBGeneID")) %>% filter(!is.na(set)) %>% select(seqnames:end, name, feature, set, LE_summit:L3_summit) %>% rowwise() %>% mutate(peak_summit = round(mean(
+    c(LE_summit, L1_summit, L3_summit), na.rm = TRUE
+  ))) %>% mutate(
+    summit_start = start + peak_summit - 250,
+    summit_end = start + peak_summit + 250,
+    peak_width = summit_end - summit_start
+  ) %>% filter(!is.na(seqnames))
 dineen_set_summit
 ```
 
@@ -60,11 +98,6 @@ dineen_GRange
 Get DNA sequences
 
 ```{r}
-getwd()
-#BiocManager::install("Biostrings")
-# BiocManager::install("BSgenome.Celegans.UCSC.ce11")
-library(Biostrings)e
-library(BSgenome.Celegans.UCSC.ce11)
 getSeq(Celegans, dineen_GRange)
 export(getSeq(Celegans, dineen_GRange), "01_input/dineen_all_sets_peaks.fasta")
 ```
@@ -82,16 +115,6 @@ for(set in setnames){
 
 ```
 
-Use MEME-Suite docker image to identify motifs within binding sites
-
-```{bash}
-# cd 01_input
-#docker run -v $(pwd):/home/meme --user $(id -u):$(id -g) memesuite/memesuite ls -lrtha 01_input
-echo "all_dineen_sets_peaks.fasta" > description
-OUTDIR="02_output"
-SET="all_dineen_sets_peaks"
-docker run -v $(pwd):/home/meme --user $(id -u):$(id -g) memesuite/memesuite meme-chip -oc $OUTDIR/$SET -time 300 -ccut 100 -fdesc description -order 1 -db motif_databases/CIS-BP/Caenorhabditis_elegans.meme -meme-mod zoops -meme-minw 6 -meme-maxw 30 -meme-nmotifs 3 -meme-searchsize 100000 -dreme-e 0.05 -centrimo-score 5.0 -centrimo-ethresh 10.0 01_input/all_dineen_sets_peaks.fasta
-```
 
 
 ### GO data and processing functions
@@ -110,7 +133,6 @@ Data is from paramart, the functions are necessary to make the topGO analysis ea
 
 ```{r GO Functions, echo=FALSE, cache=TRUE}
 # get the annotations from PARASITE
-library(biomaRt)
 if (! "paramart" %in% ls()) {
   system.time({paramart <- useMart("parasite_mart", dataset = "wbps_gene", host = "https://parasite.wormbase.org", port = 443)})}
 if (! "WORMGO" %in% ls()) {
@@ -207,22 +229,7 @@ omigod = lapply(genelists, function(set_genelist) {
       MF.tab = GOSummary(dataset$MF) %>% filter(elim < .05) %>% arrange(elim) %>% mutate(DB="MF")
       return(rbind(BP.tab, CC.tab, MF.tab))
   })
-      
-# #library(parallelly)
-# # cl <- makeClusterPSOCK(4) 
-# clusterExport(cl, list("GOSummary","unique.dineen.wbid","mkGO","geneID2GO"))
-# system.time({
-#   omigod = parLapply(cl, genelists, function(set_genelist) {
-#       library(dplyr,quietly = T,warn.conflicts = F)
-#       library(topGO,quietly = T,warn.conflicts = F)
-#       dataset = mkGO(set_genelist$fore, set_genelist$back)
-#       BP.tab = GOSummary(dataset$BP) %>% filter(elim < .05) %>% arrange(elim) %>% mutate(DB="BP")
-#       CC.tab = GOSummary(dataset$CC) %>% filter(elim < .05) %>% arrange(elim) %>% mutate(DB="CC")
-#       MF.tab = GOSummary(dataset$MF) %>% filter(elim < .05) %>% arrange(elim) %>% mutate(DB="MF")
-#       return(rbind(BP.tab, CC.tab, MF.tab))
-#   })
-# })
-# stopCluster(cl)
+
 ```
 
 ### Output GO term enrichment results. Also, write files to paste into Revigo analysis, which collapses terms.
@@ -231,16 +238,16 @@ Paste output two-column files (GO-term p-like-value) into the form at. http://re
 
 
 ``` {r GO output, echo=FALSE}
-library(knitr)
-library(dplyr)
+# library(knitr)
+
 o=omigod
-howmany_in_kable = 50
-# kable(o[['all']] %>% select(-classicFisher,-'Rank in elim') %>% rename(pval=elim) %>% arrange(pval) %>% head(howmany_in_kable), caption="Dataset versus genome")
-kable(o[['SET1']] %>% select(-classicFisher,-'Rank in elim') %>% rename(pval=elim) %>% arrange(pval) %>% head(howmany_in_kable), caption="SET1 Genes")
-kable(o[['K1']] %>% select(-classicFisher,-'Rank in elim') %>% rename(pval=elim) %>% arrange(pval) %>% head(howmany_in_kable), caption="Embryo cluster versus whole dataset")
-kable(o[['K2']] %>% select(-classicFisher,-'Rank in elim') %>% rename(pval=elim) %>% arrange(pval) %>% head(howmany_in_kable), caption="Larval cluster versus whole dataset")
-kable(o[['K3']] %>% select(-classicFisher,-'Rank in elim') %>% rename(pval=elim) %>% arrange(pval) %>% head(howmany_in_kable), caption="L3 cluster versus whole dataset")
-kable(o[['K4']] %>% select(-classicFisher,-'Rank in elim') %>% rename(pval=elim) %>% arrange(pval) %>% head(howmany_in_kable),
+# howmany_in_kable = 50
+# # kable(o[['all']] %>% select(-classicFisher,-'Rank in elim') %>% rename(pval=elim) %>% arrange(pval) %>% head(howmany_in_kable), caption="Dataset versus genome")
+# kable(o[['SET1']] %>% select(-classicFisher,-'Rank in elim') %>% rename(pval=elim) %>% arrange(pval) %>% head(howmany_in_kable), caption="SET1 Genes")
+# kable(o[['K1']] %>% select(-classicFisher,-'Rank in elim') %>% rename(pval=elim) %>% arrange(pval) %>% head(howmany_in_kable), caption="Embryo cluster versus whole dataset")
+# kable(o[['K2']] %>% select(-classicFisher,-'Rank in elim') %>% rename(pval=elim) %>% arrange(pval) %>% head(howmany_in_kable), caption="Larval cluster versus whole dataset")
+# kable(o[['K3']] %>% select(-classicFisher,-'Rank in elim') %>% rename(pval=elim) %>% arrange(pval) %>% head(howmany_in_kable), caption="L3 cluster versus whole dataset")
+# kable(o[['K4']] %>% select(-classicFisher,-'Rank in elim') %>% rename(pval=elim) %>% arrange(pval) %>% head(howmany_in_kable),
       caption="Increasing cluster versus whole dataset")
 
 o[['SET1']] %>% dplyr::select(-classicFisher, -"Rank in elim") %>% rename(pval = elim) %>% arrange(pval) %>% head(howmany_in_kable)
@@ -266,5 +273,568 @@ o[['SET5']] %>% dplyr::select(-classicFisher, -"Rank in elim") %>% rename(pval =
 o[['SET6']] %>% dplyr::select(-classicFisher, -"Rank in elim") %>% rename(pval = elim) %>% arrange(pval) %>% head(howmany_in_kable)
 ```
 
+
+# L1 stage ELT-2 bound differential expression sets
+
+```{r}
+bound_set_summit <-
+  elt2_df %>% full_join(bound_only_sets, by = c("feature" = "WBGeneID")) %>% filter(!is.na(set)) %>% dplyr::select(seqnames:end, name, feature, set, LE_summit:L3_summit) %>% rowwise() %>% mutate(peak_summit = round(mean(
+    c(LE_summit, L1_summit, L3_summit), na.rm = TRUE
+  ))) %>% mutate(
+    summit_start = start + peak_summit - 250,
+    summit_end = start + peak_summit + 250,
+    peak_width = summit_end - summit_start
+  ) %>% filter(!is.na(seqnames))
+bound_set_summit
+```
+
+Turn into GenomicRanges object
+```{r}
+chroms <- Seqinfo(c('chrI', 'chrII', 'chrIII', 'chrIV', 'chrV', 'chrX', 'chrM'),
+                    c(15072434, 15279421, 13783801, 17493829, 20924180, 17718942, 13794),
+                    c(rep(FALSE,6), TRUE),
+                    rep("ce11",7))
+
+bound_GRange <- trim(makeGRangesFromDataFrame(bound_set_summit,
+                         keep.extra.columns = FALSE,
+                         ignore.strand = TRUE,
+                         start.field = "summit_start",
+                         end.field = "summit_end",
+                         seqinfo = chroms,
+                         starts.in.df.are.0based = T,
+                         ))
+bound_GRange$bound_set <- bound_set_summit$set
+bound_GRange$feature <- bound_set_summit$feature
+bound_GRange$name <- bound_set_summit$name
+names(bound_GRange) <- bound_set_summit$name
+bound_GRange
+```
+
+Get DNA sequences
+
+```{r}
+getSeq(Celegans, bound_GRange)
+export(getSeq(Celegans, bound_GRange), "01_input/bound_all_class_peaks.fasta")
+```
+
+subset based on dineen sets and get DNA sequences
+
+```{r}
+
+setnames <- paste(rep("Class", 4), LETTERS[1:4], sep = "")
+for(set in setnames){
+  filename <- paste("01_input/bound_", set, "_peaks.fasta", sep = "")
+  export(getSeq(Celegans, bound_GRange[elementMetadata(bound_GRange)[,"bound_set"] == set]), filename)
+}
+
+```
+
+# GO terms of bound sets
+
+``` {r GO term analysis, include=FALSE, cache=TRUE}
+# BiocManager::install("topGO")
+# library(topGO)
+bound_all_wbid <- as.data.frame(mcols(bound_GRange))
+
+bound_ClassA_wbid = unique((bound_all_wbid %>% filter(bound_set == "ClassA"))$feature)
+bound_ClassB_wbid = unique((bound_all_wbid %>% filter(bound_set == "ClassB"))$feature)
+bound_ClassC_wbid = unique((bound_all_wbid %>% filter(bound_set == "ClassC"))$feature)
+bound_ClassD_wbid = unique((bound_all_wbid %>% filter(bound_set == "ClassD"))$feature)
+bound_ClassB_wbid
+```
+
+save WBGeneIDs for bound sets
+```{r}
+write.table(
+  file = "01_input/bound_wbgeneid/bound_all_wbid.txt",
+  bound_all_wbid$feature,
+  col.names = FALSE,
+  row.names = FALSE,
+  quote = FALSE
+)
+write.table(
+  file = "01_input/bound_wbgeneid/bound_ClassA_wbid.txt",
+  bound_ClassA_wbid,
+  col.names = FALSE,
+  row.names = FALSE,
+  quote = FALSE
+)
+write.table(
+  file = "01_input/bound_wbgeneid/bound_ClassB_wbid.txt",
+  bound_ClassB_wbid,
+  col.names = FALSE,
+  row.names = FALSE,
+  quote = FALSE
+)
+write.table(
+  file = "01_input/bound_wbgeneid/bound_ClassC_wbid.txt",
+  bound_ClassC_wbid,
+  col.names = FALSE,
+  row.names = FALSE,
+  quote = FALSE
+)
+write.table(
+  file = "01_input/bound_wbgeneid/bound_ClassD_wbid.txt",
+  bound_ClassD_wbid,
+  col.names = FALSE,
+  row.names = FALSE,
+  quote = FALSE
+)
+```
+
+
+``` {r GO term analysis, include=FALSE, cache=TRUE}
+unique.bound.wbid = unique(bound_all_wbid$feature)
+all.genes <- unique(as.character(WORMGO$wbps_gene_id))
+all.GO = mkGO(unique.bound.wbid, all.genes)
+
+omigod = list()
+genelists = list(
+  ClassA=list(fore=bound_ClassA_wbid, back=unique.bound.wbid),
+  ClassB=list(fore=bound_ClassB_wbid, back=unique.bound.wbid),
+  ClassC=list(fore=bound_ClassC_wbid, back=unique.bound.wbid),
+  ClassD=list(fore=bound_ClassD_wbid, back=unique.dineen.wbid)
+)
+
+omigod = lapply(genelists, function(set_genelist) {
+  length(set_genelist)
+      dataset = mkGO(set_genelist$fore, set_genelist$back)
+      BP.tab = GOSummary(dataset$BP) %>% filter(elim < .05) %>% arrange(elim) %>% mutate(DB="BP")
+      CC.tab = GOSummary(dataset$CC) %>% filter(elim < .05) %>% arrange(elim) %>% mutate(DB="CC")
+      MF.tab = GOSummary(dataset$MF) %>% filter(elim < .05) %>% arrange(elim) %>% mutate(DB="MF")
+      return(rbind(BP.tab, CC.tab, MF.tab))
+  })
+
+```
+
+```{r}
+omigod[['ClassA']] %>% dplyr::select(-classicFisher, -"Rank in elim") %>% rename(pval = elim) %>% arrange(pval)
+```
+
+```{r}
+omigod[['ClassB']] %>% dplyr::select(-classicFisher, -"Rank in elim") %>% rename(pval = elim) %>% arrange(pval)
+```
+
+```{r}
+omigod[['ClassC']] %>% dplyr::select(-classicFisher, -"Rank in elim") %>% rename(pval = elim) %>% arrange(pval)
+```
+
+```{r}
+omigod[['ClassD']] %>% dplyr::select(-classicFisher, -"Rank in elim") %>% rename(pval = elim) %>% arrange(pval)
+```
+
+# Use clusterProfiler
+
+```{r}
+
+
+gene.df <- bitr(dineen_nishimura_sets_ascend$WBGeneID,
+     fromType = "WORMBASE",
+     toType = "ENTREZID",
+     OrgDb = org.Ce.eg.db)
+nrow(gene.df)
+nrow(dineen_nishimura_sets_ascend)
+```
+
+```{r}
+ggo_CC <- groupGO(gene = dineen_nishimura_sets_ascend$WBGeneID,
+        OrgDb = org.Ce.eg.db,
+        ont = "CC",
+        level = 3,
+        readable = TRUE,
+        keyType = 'WORMBASE')
+ggo_MF <- groupGO(gene = dineen_nishimura_sets_ascend$WBGeneID,
+        OrgDb = org.Ce.eg.db,
+        ont = "MF",
+        level = 3,
+        readable = TRUE,
+        keyType = 'WORMBASE')
+ggo_BP <- groupGO(gene = dineen_nishimura_sets_ascend$WBGeneID,
+        OrgDb = org.Ce.eg.db,
+        ont = "BP",
+        level = 5,
+        readable = TRUE,
+        keyType = 'WORMBASE')
+```
+
+
+```{r}
+head(ggo_CC)
+head(ggo_MF)
+head(ggo_BP)
+```
+
+```{r}
+ego <- enrichGO(gene = (dineen_nishimura_sets_ascend %>% filter(set == "SET2"))$WBGeneID,
+                universe = dineen_nishimura_sets_ascend$WBGeneID,
+                OrgDb = org.Ce.eg.db,
+                ont = "CC",
+                pAdjustMethod = "BH",
+                pvalueCutoff = 0.01,
+                qvalueCutoff = 0.05,
+                readable = TRUE,
+                keyType = 'WORMBASE')
+
+ego_mf <- enrichGO(gene = dineen_nishimura_sets_ascend$WBGeneID,
+                universe = as.data.frame(org.Ce.egWORMBASE)$wormbase_id,
+                OrgDb = org.Ce.eg.db,
+                ont = "MF",
+                pAdjustMethod = "BH",
+                pvalueCutoff = 0.01,
+                qvalueCutoff = 0.05,
+                readable = TRUE,
+                keyType = 'WORMBASE')
+
+as.data.frame(ego_mf) %>% dplyr::arrange(p.adjust)
+```
+
+```{r}
+ego_bp <- enrichGO(gene = dineen_nishimura_sets_ascend$WBGeneID,
+                universe = as.data.frame(org.Ce.egWORMBASE)$wormbase_id,
+                OrgDb = org.Ce.eg.db,
+                ont = "BP",
+                pAdjustMethod = "BH",
+                pvalueCutoff = 0.01,
+                qvalueCutoff = 0.05,
+                readable = TRUE,
+                keyType = 'WORMBASE')
+
+as.data.frame(ego_bp) %>% dplyr::arrange(p.adjust)
+```
+
+```{r}
+ego_cc <- enrichGO(gene = dineen_nishimura_sets_ascend$WBGeneID,
+                universe = as.data.frame(org.Ce.egWORMBASE)$wormbase_id,
+                OrgDb = org.Ce.eg.db,
+                ont = "CC",
+                pAdjustMethod = "BH",
+                pvalueCutoff = 0.01,
+                qvalueCutoff = 0.05,
+                readable = TRUE,
+                keyType = 'WORMBASE')
+
+as.data.frame(ego_cc) %>% dplyr::arrange(p.adjust)
+```
+
+
+compareCluster
+
+```{r}
+dineensetEntrez<- gene.df %>% left_join(dineen_nishimura_sets_ascend, by = c("WORMBASE" = "WBGeneID"))
+head(dineensetEntrez)
+nrow(dineensetEntrez)
+```
+
+
+```{r}
+dineen_compareCluster_entrez <- list(SET1 = (dineensetEntrez %>% filter(set == "SET1"))$ENTREZID,
+     SET2 = (dineensetEntrez %>% filter(set == "SET2"))$ENTREZID,
+     SET3 = (dineensetEntrez %>% filter(set == "SET3"))$ENTREZID,
+     SET4 = (dineensetEntrez %>% filter(set == "SET4"))$ENTREZID,
+     SET5 = (dineensetEntrez %>% filter(set == "SET5"))$ENTREZID,
+     SET6 = (dineensetEntrez %>% filter(set == "SET6"))$ENTREZID
+     )
+lapply(dineen_compareCluster_entrez, head)
+lapply(dineen_compareCluster_entrez, length)
+```
+```{r}
+dineen_compareCluster <- list(SET1 = (dineen_nishimura_sets_ascend %>% filter(set == "SET1"))$WBGeneID,
+     SET2 = (dineen_nishimura_sets_ascend %>% filter(set == "SET2"))$WBGeneID,
+     SET3 = (dineen_nishimura_sets_ascend %>% filter(set == "SET3"))$WBGeneID,
+     SET4 = (dineen_nishimura_sets_ascend %>% filter(set == "SET4"))$WBGeneID,
+     SET5 = (dineen_nishimura_sets_ascend %>% filter(set == "SET5"))$WBGeneID,
+     SET6 = (dineen_nishimura_sets_ascend %>% filter(set == "SET6"))$WBGeneID
+     )
+lapply(dineen_compareCluster, head)
+lapply(dineen_compareCluster, length)
+```
+
+```{r}
+c_eG_cc <-
+  compareCluster(
+    geneClusters = dineen_compareCluster,
+    fun = "enrichGO",
+    OrgDb = org.Ce.eg.db,
+    keyType = 'WORMBASE',
+    ont = "CC",
+    pAdjustMethod = "BH",
+    pvalueCutoff = 0.01,
+    qvalueCutoff = 0.05,
+    readable = TRUE
+  )
+as.data.frame(c_eG_cc)
+dotplot(c_eG_cc, showCategory = 5, by = "count")
+```
+
+```{r}
+ceG_simplify <- simplify(c_eG, cutoff=1, by="p.adjust", select_fun=min)
+dotplot(dropGO(ceG_simplify, term = "GO:0099086"), showCategory = 5, by = "count")
+```
+
+
+```{r}
+c_gG<- compareCluster(geneClusters = dineen_compareCluster, fun="groupGO", OrgDb = 'org.Ce.eg.db', keyType = 'WORMBASE', level = 2, ont = "BP")
+dotplot(c_gG, showCategory = NULL)
+```
+
+```{r}
+c_eK<- compareCluster(geneClusters = dineen_compareCluster_entrez, fun="enrichKEGG", organism = "cel", pvalueCutoff = 0.05, keyType = "ncbi-geneid", pAdjustMethod = "BH", minGSSize = 5, maxGSSize = 150)
+
+dotplot(c_eK)
+```
+
+# ELT-2 Bound and ELT-2/ELT-7 Differentially expressed compareCluster analysis
+
+compare cluster for bound sets
+
+```{r}
+bound_only_sets
+
+bound_compareCluster <- list(
+  ClassA = (bound_only_sets %>% filter(set == "ClassA"))$WBGeneID,
+  ClassB = (bound_only_sets %>% filter(set == "ClassB"))$WBGeneID,
+  ClassC = (bound_only_sets %>% filter(set == "ClassC"))$WBGeneID,
+  ClassD = (bound_only_sets %>% filter(set == "ClassD"))$WBGeneID
+)
+lapply(bound_compareCluster, head)
+lapply(bound_compareCluster, length)
+```
+
+# GO Term biological process for all bound and differentially expressed genes
+
+```{r}
+bound_all_go <- enrichGO(gene = bound_only_sets$WBGeneID,
+                universe = as.data.frame(org.Ce.egWORMBASE)$wormbase_id,
+                OrgDb = org.Ce.eg.db,
+                ont = "BP",
+                pAdjustMethod = "BH",
+                pvalueCutoff = 0.01,
+                qvalueCutoff = 0.05,
+                readable = TRUE,
+                keyType = 'WORMBASE')
+as.data.frame(bound_all_go)
+```
+
+# GO Term Biological Process for bound classes
+
+```{r}
+c_eG_bound <- compareCluster(geneClusters = bound_compareCluster, fun="enrichGO", OrgDb = org.Ce.eg.db, keyType = 'WORMBASE', ont = "BP", readable = TRUE)
+head(c_eG_bound)
+dotplot(c_eG_bound, showCategory = NULL)
+```
+
+```{r}
+c_eG_bound_simplify <- simplify(c_eG_bound, cutoff=0.4, by="p.adjust", select_fun=min)
+dotplot(c_eG_bound_simplify, showCategory = NULL, by = "count")
+```
+
+```{r}
+setReadable(c_eG_bound, OrgDb = org.Ce.eg.db)
+```
+
+
+Try gene set enrichment analysis
+
+```{r}
+library(readxl)
+resWtV2 <- read_excel("~/Dropbox/01_GITHUBREPO/RWC23_elt2_regulated_genes/01_ChIPseq_RNAseq_Integration/01_input/Table_S3_Pairwise_Comparison.xlsx", 
+    sheet = "2017-07-12_resWtV2", skip = 2, na = "NA")
+resWtV2_IDs <- bitr(resWtV2$WBGeneID,
+     fromType = "WORMBASE",
+     toType = "ENTREZID",
+     OrgDb = org.Ce.eg.db)
+resWtV2<- resWtV2 %>% left_join(resWtV2_IDs, by = c("WBGeneID" = "WORMBASE"))
+
+head(resWtV2)
+```
+
+# ELT-2 vs WT KEGG pathways
+
+```{r}
+geneList <- resWtV2$log2FoldChange
+names(geneList) <- resWtV2$ENTREZID
+geneList <- sort(geneList, decreasing = TRUE)
+head(geneList)
+```
+filter based on log2foldchange
+
+```{r}
+gene <- names(geneList)[abs(geneList) > 2]
+head(gene)
+```
+
+```{r}
+keytypes(org.Ce.eg.db)
+```
+
+```{r}
+search_kegg_organism("elegans")
+```
+
+Enriched KEGG pathways
+
+```{r}
+kk <- enrichKEGG(gene = gene, organism = "cel", pvalueCutoff = 0.05, keyType = "ncbi-geneid", pAdjustMethod = "BH", minGSSize = 5, maxGSSize = 150)
+dotplot(kk)
+as.data.frame(kk)
+```
+
+```{r}
+browseKEGG(kk_up, "cel04142")
+```
+
+# ELT-2 vs WT gseGO
+
+
+```{r}
+gsego_bound <- gseGO(
+  geneList = geneList,
+  OrgDb = org.Ce.eg.db,
+  ont = "MF",
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  nPerm = 10000,
+  minGSSize = 10,
+  maxGSSize = 100,
+  verbose = FALSE
+)
+
+as.data.frame(setReadable(gsego_bound, OrgDb = org.Ce.eg.db, keyType = "ENTREZID"))
+
+dotplot(gsego_bound)
+```
+
+```{r}
+BiocManager::install("enrichplot")
+library(enrichplot)
+
+gseaplot2(gsego_bound, geneSetID = 1:5)
+```
+
+
+# ELT-2 vs WT KEGG Gene Set Enrichment Analysis
+
+```{r}
+kk2 <- gseKEGG(geneList = geneList,
+        organism = "cel",
+        keyType = "ncbi-geneid",
+        pvalueCutoff = 0.05,
+        pAdjustMethod = "BH",
+        nPerm = 50000L,
+        minGSSize = 10,
+        maxGSSize = 150,
+        verbose = FALSE)
+as.data.frame(setReadable(kk2, OrgDb = org.Ce.eg.db, keyType = "ENTREZID"))
+```
+
+```{r}
+dotplot(kk2)
+```
+
+
+
+# Enriched KEGG pathways for dineen sets
+
+```{r}
+ck <- compareCluster(dineen_compareCluster_entrez, fun = "enrichKEGG", organism = "cel", keyType = "ncbi-geneid")
+# View(as.data.frame(ck))
+dotplot(ck)
+```
+
+# Enriched pathways for all bound and differentially expressed genes
+
+```{r}
+bound_kegg <- enrichKEGG(gene = bound_only_entrez$ENTREZID, organism = "cel", pvalueCutoff = 0.05, keyType = "ncbi-geneid", pAdjustMethod = "BH", minGSSize = 5, maxGSSize = 150)
+as.data.frame(setReadable(bound_kegg, OrgDb = org.Ce.eg.db, keyType = "ENTREZID"))
+dotplot(bound_kegg, showCategory = 100)
+```
+
+# enriched KEGG pathways for bound dineen sets
+
+```{r bound-compareCluster-enrichKEGG}
+boundgenedf <- bitr(bound_only_sets$WBGeneID,
+     fromType = "WORMBASE",
+     toType = "ENTREZID",
+     OrgDb = org.Ce.eg.db)
+boundgenedf
+bound_only_entrez <- bound_only_sets %>% left_join(boundgenedf, by = c("WBGeneID" = "WORMBASE"))
+bound_compareCluster_entrez <- list(
+  ClassA = (bound_only_entrez %>% filter(set == "ClassA"))$ENTREZID,
+  ClassB = (bound_only_entrez %>% filter(set == "ClassB"))$ENTREZID,
+  ClassC = (bound_only_entrez %>% filter(set == "ClassC"))$ENTREZID,
+  ClassD = (bound_only_entrez %>% filter(set == "ClassD"))$ENTREZID
+)
+
+ck_bound <- compareCluster(bound_compareCluster_entrez, fun = "enrichKEGG", organism = "cel", keyType = "ncbi-geneid")
+View(as.data.frame(ck_bound))
+
+dotplot(ck_bound, showCategory = NULL, by = "count")
+View(as.data.frame(ck_bound))
+dotplot(ck_bound, color = "p.adjust")
+```
+
+
+```{r bound-compareCluster-enrichKEGG}
+ggplot(as.data.frame(ck_bound) %>% rowwise() %>% mutate(GeneRatio = eval(parse(text = GeneRatio))), aes(x = Cluster, y = Description)) + geom_point(aes(size = GeneRatio, color = -log10(p.adjust))) + scale_color_gradient(low = "grey", high = "black") + theme_bw()
+
+```
+
+```{r}
+as.data.frame(ck_bound)
+```
+
+
+```{r bound-compareCluster-enrichKEGG}
+View(as.data.frame(
+  setReadable(
+    enrichKEGG(
+      bound_compareCluster_entrez[[3]],
+      organism = 'cel',
+      keyType = 'ncbi-geneid'
+    ),
+    OrgDb = org.Ce.eg.db,
+    keyType = "ENTREZID"
+  )
+))
+
+View(as.data.frame(
+  setReadable(
+    enrichKEGG(
+      bound_compareCluster_entrez[[4]],
+      organism = 'cel',
+      keyType = 'ncbi-geneid'
+    ),
+    OrgDb = org.Ce.eg.db,
+    keyType = "ENTREZID"
+  )
+))
+
+```
+
+
+```{r}
+kegg <- gseKEGG(
+  geneList = geneList,
+  organism = "cel",
+  keyType = "ncbi-geneid",
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  nPerm = 10000,
+  minGSSize = 10,
+  maxGSSize = 150,
+  verbose = FALSE
+)
+
+dotplot(kegg)
+```
+
+```{r}
+ridgeplot(kegg)
+```
+
+
+```{r}
+as.data.frame(setReadable(kegg, OrgDb = org.Ce.eg.db, keyType = "ENTREZID"))
+```
 
 
