@@ -1708,6 +1708,7 @@ dineen_ELT2_pearson_residuals$Dineen_Set <-
     dineen_ELT2_pearson_residuals$Dineen_Set,
     levels = c("SET6", "SET5", "SET4", "SET3", "SET2", "SET1")
   )
+dineen_ELT2_pearson_residuals$ELT2_cluster <- factor(dineen_ELT2_pearson_residuals$ELT2_cluster, levels = c("Embryo_Specific", "Larval", "Increasing", "L3_High", "Not_Changing", "not bound"))
 ggplot(dineen_ELT2_pearson_residuals,
        aes(x = ELT2_cluster, y = Dineen_Set)) +
   geom_point(aes(size = Observed, color = Pearson_Residual)) + scale_color_gradient2(
@@ -1717,6 +1718,8 @@ ggplot(dineen_ELT2_pearson_residuals,
     midpoint = 0
   ) +
   theme_bw()
+
+ggsave("03_plots/18_Dineen_Sets_ELT2clusters_custom_mosaic.pdf", width = 5, height = 3, useDingbats=FALSE)
 ```
 
 

@@ -316,32 +316,32 @@ BoeckRNA_ELT2_chip
 ```{r BoeckRNA_ELT2_chip}
 library(fpc) # for bootstrapping
 library(vcd) # for mosaic
+# 
+# gene_names <-
+#   c(
+#     "flh-3",
+#     "elt-7",
+#     "clec-258",
+#     "pqm-1",
+#     "mtl-2",
+#     "ets-4",
+#     "aat-6",
+#     "sre-23",
+#     "Y45F10B.59",
+#     "zmp-2",
+#     "F08G5.3",
+#     "Y113G7B.11",
+#     "F40F9.10",
+#     "coel-1",
+#     "T25D10.4",
+#     "M88.4",
+#     "bcl-11",
+#     "clec-44",
+#     "lin-48",
+#     "K01F9.2"
+#   )
 
-gene_names <-
-  c(
-    "flh-3",
-    "elt-7",
-    "clec-258",
-    "pqm-1",
-    "mtl-2",
-    "ets-4",
-    "aat-6",
-    "sre-23",
-    "Y45F10B.59",
-    "zmp-2",
-    "F08G5.3",
-    "Y113G7B.11",
-    "F40F9.10",
-    "coel-1",
-    "T25D10.4",
-    "M88.4",
-    "bcl-11",
-    "clec-44",
-    "lin-48",
-    "K01F9.2"
-  )
-
-# gene_names <- c("sre-23", "Y45F10B.59", "zmp-2", "F08G5.3", "Y113G7B.11", "F40F9.10", "coel-1", "T25D10.4", "M88.4", "bcl-11")
+gene_names <- c("sre-23", "T25D10.4", "M88.4", "bcl-11", "aat-6", "pgp-1", "ftn-1")
 
 real = apply(chip_rna_matrix_scaled, 1, function(x) { ! any(is.na(x)) }) # NA's introduced by log transform don't jive here
 embryo_specific = chip_rna_df$cluster.description == "Embryo_Specific"
@@ -407,6 +407,22 @@ mosaic(t(tab),shade=T,
 ```
 
 ```{r}
+boeck_heatmap <- Heatmap(data.whole,
+        column_title=sprintf("Log(RNA Timecourse), Variance > %.2f", qthreshold),
+        name = "Boeck Time Resolved RNA",
+        cluster_columns = F,
+        row_order=hc$order,row_split=cutree(hc, nclust),show_row_names = F) + rowAnnotation(foo = anno_mark(at = chip_GOI_df$index,
+                               labels = chip_GOI_df$name))
+
+
+pdf(file = "03_plots/Boeck_Time_Resolved_RNA_Heatmap_geneAnnotated_201216.pdf", width = 7, height = 5)
+boeck_heatmap
+dev.off()
+dev.set(dev.next())
+```
+
+
+```{r pearson-residuals}
 corrplot(
   chisq.test(tab, simulate.p.value = TRUE)$stdres,
   is.corr = FALSE,
@@ -417,6 +433,30 @@ corrplot(
   tl.srt = 45
 )
 
+```
+```{r custom-mosaic}
+boeck_pearson_residuals <-
+  as.data.frame(chisq.test(tab, simulate.p.value = TRUE)$stdres)
+boeck_pearson_residuals <-
+  cbind(boeck_pearson_residuals,
+        as.data.frame(chisq.test(tab, simulate.p.value = TRUE)$observed)$Freq)
+colnames(boeck_pearson_residuals) <-
+  c("hclusters", "ELT2_cluster", "Pearson_Residual", "Observed")
+boeck_pearson_residuals$hclusters <-
+  factor(
+    boeck_pearson_residuals$hclusters,
+    levels = c("3", "2", "1")
+  )
+ggplot(boeck_pearson_residuals,
+       aes(x = ELT2_cluster, y = hclusters)) +
+  geom_point(aes(size = Observed, color = Pearson_Residual)) + scale_color_gradient2(
+    high = "red",
+    low = "blue",
+    mid = "white",
+    midpoint = 0
+  ) +
+  theme_bw()
+ggsave("03_plots/Boeck_ELT2clusters_moasiac_201216.pdf", width = 5, height = 3, useDingbats=FALSE)
 ```
 
 

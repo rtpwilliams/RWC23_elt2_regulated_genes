@@ -371,7 +371,7 @@ ggplot(
   aes(x = Cluster, y = Description)
 ) + 
   geom_point(aes(size = GeneRatio, color = -log10(p.adjust))) + scale_color_gradient(low = "grey", high = "black") + theme_bw()
-
+ggsave(file = "Bound_sets_compareCluster_enrichKEGG_201216.pdf", width = 7, height = 5, useDingbats = FALSE)
 ```
 
 ```{r}
@@ -498,13 +498,38 @@ gseGO_wtv2 <- gseGO(
   verbose = FALSE
 )
 dotplot(gseGO_wtv2)
-enrichplot::gseaplot2(gseGO_wtv2, geneSetID = 1:6)
+enrichplot::gseaplot2(gseGO_wtv2, geneSetID = 6:10)
 dotplot(simplify(gseGO_wtv2, cutoff = 0.01))
 gseGO_wtv2.df <- as.data.frame(setReadable(gseGO_wtv2, OrgDb = org.Ce.eg.db, keyType = "ENTREZID"))
 gseGO_wtv2.df %>% dplyr::filter(Description == "oogenesis")
 gseGO_wtv2.df %>% dplyr::filter(Description == "meiotic nuclear division")
+gseGO_wtv2.df
 ```
 
+Dineen sets bound vs not bound compareCluster Gene Ontology Biological Process
+
+```{r}
+elt2_L1_anno
+dineen_compareCluster
+mydf <- data.frame(Entrez = names(dineen_compareCluster))
+
+dineenset_binding_compareCluster <- dineensetEntrez %>% left_join(elt2_L1_anno, by = c("WORMBASE" = "WBGeneID"))
+dineenset_binding_compareCluster
+```
+
+
+```{r}
+formula_res <- compareCluster(WORMBASE~set+elt2_detected_in_L1, data = dineenset_binding_compareCluster, fun="enrichGO", universe = as.data.frame(org.Ce.egWORMBASE)$wormbase_id,
+                OrgDb = org.Ce.eg.db,
+                ont = "BP",
+                pAdjustMethod = "BH",
+                pvalueCutoff = 0.01,
+                qvalueCutoff = 0.05,
+                readable = TRUE,
+                keyType = 'WORMBASE')
+dotplot(formula_res, x=~elt2_detected_in_L1, showCategory = 5) + ggplot2::facet_grid(~set)
+ggsave(file = "Dineen_sets_compareCluster_enrichGO_BiologicalProcess_201216.pdf", width = 10, height = 7, useDingbats = FALSE)
+```
 
 
 
