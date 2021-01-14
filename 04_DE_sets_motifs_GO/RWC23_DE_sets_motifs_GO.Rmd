@@ -420,7 +420,7 @@ resWtV2_IDs <- bitr(resWtV2$WBGeneID,
      toType = "ENTREZID",
      OrgDb = org.Ce.eg.db)
 resWtV2<- resWtV2 %>% left_join(resWtV2_IDs, by = c("WBGeneID" = "WORMBASE"))
-
+# resWtV2 <- elt2_peaks %>% filter(L1_IDR == 1) %>% dplyr::select(WBGeneID) %>% inner_join(resWtV2, by = "WBGeneID")
 head(resWtV2)
 ```
 
@@ -463,7 +463,7 @@ kk2 <- gseKEGG(geneList = geneList,
         minGSSize = 10,
         maxGSSize = 150,
         verbose = FALSE)
-as.data.frame(setReadable(kk2, OrgDb = org.Ce.eg.db, keyType = "ENTREZID"))
+# View(as.data.frame(setReadable(kk2, OrgDb = org.Ce.eg.db, keyType = "ENTREZID")))
 ```
 
 ```{r}
@@ -475,12 +475,20 @@ ridgeplot(kk2)
 ```
 
 ```{r}
-enrichplot::gseaplot2(kk2, geneSetID = 1:5)
+enrichplot::gseaplot2(kk2, geneSetID = 1:6)
 ```
 
 ```{r}
 as.data.frame(setReadable(kk2, OrgDb = org.Ce.eg.db, keyType = "ENTREZID"))
 ```
+
+```{r}
+as.data.frame(setReadable(kk2, OrgDb = org.Ce.eg.db, keyType = "ENTREZID")) %>% filter(Description == "Lysosome") %>% dplyr::select(core_enrichment)
+```
+```{r}
+browseKEGG(kk2, "cel03050")
+```
+
 
 ## ELT-2 (-) vs WT: Gene Set Enrichment Analysis, Gene Ontology, Biological Process
 
@@ -517,6 +525,12 @@ dineenset_binding_compareCluster <- dineensetEntrez %>% left_join(elt2_L1_anno, 
 dineenset_binding_compareCluster
 ```
 
+# Bound gene set enrichment analysis
+
+```{r}
+
+```
+
 
 ```{r}
 formula_res <- compareCluster(WORMBASE~set+elt2_detected_in_L1, data = dineenset_binding_compareCluster, fun="enrichGO", universe = as.data.frame(org.Ce.egWORMBASE)$wormbase_id,
@@ -533,6 +547,65 @@ ggsave(file = "Dineen_sets_compareCluster_enrichGO_BiologicalProcess_201216.pdf"
 
 
 
+# ELT-2 clusters clusterProfiler
+
+TODO
+
+```{r}
+elt2_peaks
+```
 
 
+```{r}
+elt2.df <- bitr(elt2_peaks$WBGeneID,
+     fromType = "WORMBASE",
+     toType = "ENTREZID",
+     OrgDb = org.Ce.eg.db)
+
+elt2Entrez<- elt2.df %>% left_join(elt2_peaks, by = c("WORMBASE" = "WBGeneID"))
+head(elt2Entrez)
+nrow(elt2Entrez)
+```
+```{r}
+unique(elt2Entrez$cluster.description)
+```
+
+
+```{r}
+elt2_compareCluster_entrez <- list(
+     Embryo_Specific = (elt2Entrez %>% filter(cluster.description == "Embryo_Specific"))$ENTREZID,
+     Larval = (elt2Entrez %>% filter(cluster.description == "Larval"))$ENTREZID,
+     Increasing = (elt2Entrez %>% filter(cluster.description == "Increasing"))$ENTREZID,
+     L3_High = (elt2Entrez %>% filter(cluster.description == "L3_High"))$ENTREZID,
+     Not_Changing = (elt2Entrez %>% filter(cluster.description == "Not_Changing"))$ENTREZID
+     )
+lapply(elt2_compareCluster_entrez, head)
+lapply(elt2_compareCluster_entrez, length)
+head(elt2Entrez)
+```
+```{r}
+elt2_compareCluster <- list(
+     Embryo_Specific = (elt2Entrez %>% filter(cluster.description == "Embryo_Specific"))$WORMBASE,
+     Larval = (elt2Entrez %>% filter(cluster.description == "Larval"))$WORMBASE,
+     Increasing = (elt2Entrez %>% filter(cluster.description == "Increasing"))$WORMBASE,
+     L3_High = (elt2Entrez %>% filter(cluster.description == "L3_High"))$WORMBASE,
+     Not_Changing = (elt2Entrez %>% filter(cluster.description == "Not_Changing"))$WORMBASE
+     )
+lapply(elt2_compareCluster, head)
+lapply(elt2_compareCluster, length)
+```
+
+## Dineen Sets compareCluster enrichKEGG
+
+```{r}
+c_eK<- compareCluster(geneClusters = elt2_compareCluster_entrez, fun="enrichKEGG", organism = "cel", pvalueCutoff = 0.05, keyType = "ncbi-geneid", pAdjustMethod = "BH", minGSSize = 5, maxGSSize = 150)
+
+dotplot(c_eK)
+```
+
+```{r}
+c_eG_bound <- compareCluster(geneClusters = elt2_compareCluster, fun="enrichGO", OrgDb = org.Ce.eg.db, keyType = 'WORMBASE', ont = "BP", readable = TRUE)
+head(c_eG_bound)
+dotplot(c_eG_bound, showCategory = 10)
+```
 

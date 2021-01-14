@@ -1635,18 +1635,24 @@ elt2_cluster_representative[exprclust_bindclust$Larval == "present"] <- "Larval"
 elt2_cluster_representative[exprclust_bindclust$Increasing == "present"] <- "Increasing"
 
 tableformosaic <- table(exprclust_bindclust$set, elt2_cluster_representative)
-dimnames(tableformosaic) <- list("dinneners" = paste("SET", 1:6, sep = ""), " " = c("Embryo_Specific","Increasing","L3_High","Larval","not bound","Not_Changing"))
+dimnames(tableformosaic) <- list("DineenSets" = paste("SET", 1:6, sep = ""), " " = c("Embryo_Specific","Increasing","L3_High","Larval","not bound","Not_Changing"))
 dimnames(tableformosaic)
 tableformosaic
 ```
-```{r}
-ggplot()
 
-class(chisq.test(tableformosaic)$residuals)
-```
 
 ```{r}
-chisq.test(tableformosaic)$residuals
+
+tableformosaic.chisq <- chisq.test(tableformosaic, simulate.p.value = TRUE)
+colnames(tableformosaic.chisq$stdres)
+q <- p.adjust(
+  2*pnorm(
+    abs(tableformosaic.chisq$stdres), 
+    lower.tail = FALSE), 
+  method = "BH")
+tableformosiac.q <- matrix(q, ncol = 6)
+dimnames(tableformosiac.q) <- dimnames(tableformosaic)
+tableformosiac.q<- as.table(tableformosiac.q)
 ```
 
 
@@ -1703,21 +1709,41 @@ dineen_ELT2_pearson_residuals <-
         as.data.frame(chisq.test(tableformosaic, simulate.p.value = TRUE)$observed)$Freq)
 colnames(dineen_ELT2_pearson_residuals) <-
   c("Dineen_Set", "ELT2_cluster", "Pearson_Residual", "Observed")
+# set factor levels
 dineen_ELT2_pearson_residuals$Dineen_Set <-
   factor(
     dineen_ELT2_pearson_residuals$Dineen_Set,
     levels = c("SET6", "SET5", "SET4", "SET3", "SET2", "SET1")
   )
-dineen_ELT2_pearson_residuals$ELT2_cluster <- factor(dineen_ELT2_pearson_residuals$ELT2_cluster, levels = c("Embryo_Specific", "Larval", "Increasing", "L3_High", "Not_Changing", "not bound"))
+# set factor levels
+dineen_ELT2_pearson_residuals$ELT2_cluster <-
+  factor(
+    dineen_ELT2_pearson_residuals$ELT2_cluster,
+    levels = c(
+      "Embryo_Specific",
+      "Larval",
+      "Increasing",
+      "L3_High",
+      "Not_Changing",
+      "not bound"
+    )
+  )
+# add q-value
+dineen_ELT2_pearson_residuals <- cbind(dineen_ELT2_pearson_residuals, p.adjust = as.data.frame(tableformosiac.q)$Freq)
+
+# draw the plot
+# Add pass vs fail for pvalue
 ggplot(dineen_ELT2_pearson_residuals,
        aes(x = ELT2_cluster, y = Dineen_Set)) +
-  geom_point(aes(size = Observed, color = Pearson_Residual)) + scale_color_gradient2(
+  geom_point(aes(size = Observed, fill = Pearson_Residual, colour = p.adjust < 0.05), shape = 21, stroke = 1) + 
+  scale_fill_gradient2(
     high = "red",
     low = "blue",
     mid = "white",
     midpoint = 0
   ) +
-  theme_bw()
+  theme_bw() +
+  scale_color_manual(values = c("grey", "black"))
 
 ggsave("03_plots/18_Dineen_Sets_ELT2clusters_custom_mosaic.pdf", width = 5, height = 3, useDingbats=FALSE)
 ```
